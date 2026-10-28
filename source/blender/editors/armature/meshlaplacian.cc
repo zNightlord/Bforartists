@@ -26,6 +26,7 @@
 #include "BLI_ordered_edge.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
+#include "BLI_timer.hh"
 
 #include "BLT_translation.hh"
 
@@ -41,7 +42,6 @@
 
 #include "eigen_capi.h"
 #include "CLG_log.h"
-#include "PIL_time.h"
 
 #include "meshlaplacian.h"
 
@@ -1819,14 +1819,14 @@ struct GVBTimer {
   const char *phase;
   double      t0;
 
-  explicit GVBTimer(const char *phase) : phase(phase), t0(PIL_check_seconds_timer())
+  explicit GVBTimer(const char *phase) : phase(phase), t0(BLI_time_now_seconds())
   {
     CLOG_INFO(&LOG, 1, "[GVB] %s start", phase);
   }
 
   double ms() const
   {
-    return (PIL_check_seconds_timer() - t0) * 1000.0;
+    return (BLI_time_now_seconds() - t0) * 1000.0;
   }
 
   ~GVBTimer()
@@ -1967,63 +1967,76 @@ static void vote_axis(const Grid &grid,
     tmax_c[t] = std::max({tv0[t][c], tv1[t][c], tv2[t][c]});
   }
 
-  Vector<float> hits;  /* reused each column, avoids per-column allocation */
+  /* --- Build 2D spatial grid ----------------------------------------
+   * Each cell (iu, iv) holds a list of triangle indices whose bbox
+   * overlaps it. Replaces the O(ntris) per-column scan with O(local). */
+  Array<Vector<int>> cell_tris(nu * nv);
 
-  for (int iu = 0; iu < grid.res[b]; iu++) {
-    const float u = grid.origin[b] + (iu + 0.5f) * grid.vsize[b];
+  for (int t = 0; t < ntris; t++) {
+    const int ulo = std::max(0,      int(std::floor((tmin_b[t] - grid.origin[b]) / grid.vsize[b])));
+    const int uhi = std::min(nu - 1, int(std::floor((tmax_b[t] - grid.origin[b]) / grid.vsize[b])));
+    const int vlo = std::max(0,      int(std::floor((tmin_c[t] - grid.origin[c]) / grid.vsize[c])));
+    const int vhi = std::min(nv - 1, int(std::floor((tmax_c[t] - grid.origin[c]) / grid.vsize[c])));
 
-    for (int iv = 0; iv < grid.res[c]; iv++) {
-      const float v = grid.origin[c] + (iv + 0.5f) * grid.vsize[c];
-
-      hits.clear();
-      for (int t = 0; t < ntris; t++) {
-        /* Broad-phase: bounding box cull in perpendicular plane */
-        if (u < tmin_b[t] || u > tmax_b[t]) continue;
-        if (v < tmin_c[t] || v > tmax_c[t]) continue;
-
-        const float depth = ray_tri(axis, u, v, tv0[t], tv1[t], tv2[t]);
-        if (depth != FLT_MAX) {
-          hits.append(depth);
-        }
-      }
-
-      if (hits.is_empty()) {
-        continue;
-      }
-
-      std::sort(hits.begin(), hits.end());
-      const int nhits = int(hits.size());
-
-      /* Write vote bit for voxel at axis-index ia, perp-indices iu/iv */
-      const auto set_vote = [&](int ia) {
-        int3 coords;
-        coords[a] = ia;
-        coords[b] = iu;
-        coords[c] = iv;
-        votes[grid.idx(coords)] |= bit;
-      };
-
-      /* Forward pass: walk low→high, toggling parity at each intersection */
-      {
-        int cross = 0, hi = 0;
-        for (int ia = 0; ia < grid.res[a]; ia++) {
-          const float center = grid.origin[a] + (ia + 0.5f) * grid.vsize[a];
-          while (hi < nhits && hits[hi] <= center) { cross++; hi++; }
-          if (cross & 1) set_vote(ia);
-        }
-      }
-
-      /* Backward pass: same logic from the opposite end (Eq. 5 OR) */
-      {
-        int cross = 0, hi = nhits - 1;
-        for (int ia = grid.res[a] - 1; ia >= 0; ia--) {
-          const float center = grid.origin[a] + (ia + 0.5f) * grid.vsize[a];
-          while (hi >= 0 && hits[hi] >= center) { cross++; hi--; }
-          if (cross & 1) set_vote(ia);
-        }
+    for (int iv = vlo; iv <= vhi; iv++) {
+      for (int iu = ulo; iu <= uhi; iu++) {
+        cell_tris[iu + iv * nu].append(t);
       }
     }
   }
+
+  /* --- Parallel ray casting -----------------------------------------
+   * Each iu strip writes to voxels with a unique b-coordinate value,
+   * so strips are disjoint in flat index space — no race condition. */
+  threading::parallel_for(IndexRange(nu), 8, [&](IndexRange range) {
+    Vector<float> hits; /* thread-local, avoids allocation per column */
+
+    for (const int iu : range) {
+      const float u = grid.origin[b] + (iu + 0.5f) * grid.vsize[b];
+
+      for (int iv = 0; iv < nv; iv++) {
+        const float v = grid.origin[c] + (iv + 0.5f) * grid.vsize[c];
+
+        hits.clear();
+        for (const int t : cell_tris[iu + iv * nu]) {
+          const float depth = ray_tri(axis, u, v, tv0[t], tv1[t], tv2[t]);
+          if (depth != FLT_MAX) {
+            hits.append(depth);
+          }
+        }
+
+        if (hits.is_empty()) continue;
+
+        std::sort(hits.begin(), hits.end());
+        const int nhits = int(hits.size());
+
+        const auto set_vote = [&](int ia) {
+          int3 coords;
+          coords[a] = ia;
+          coords[b] = iu;
+          coords[c] = iv;
+          votes[grid.idx(coords)] |= bit;
+        };
+
+        { /* Forward pass */
+          int cross = 0, hi = 0;
+          for (int ia = 0; ia < grid.res[a]; ia++) {
+            const float center = grid.origin[a] + (ia + 0.5f) * grid.vsize[a];
+            while (hi < nhits && hits[hi] <= center) { cross++; hi++; }
+            if (cross & 1) set_vote(ia);
+          }
+        }
+        { /* Backward pass */
+          int cross = 0, hi = nhits - 1;
+          for (int ia = grid.res[a] - 1; ia >= 0; ia--) {
+            const float center = grid.origin[a] + (ia + 0.5f) * grid.vsize[a];
+            while (hi >= 0 && hits[hi] >= center) { cross++; hi--; }
+            if (cross & 1) set_vote(ia);
+          }
+        }
+      }
+    }
+  });
 }
 
 /**
@@ -2122,41 +2135,37 @@ static void mark_boundary(Grid &grid,
                            Span<float3> tv1,
                            Span<float3> tv2)
 {
-  const float3 half = grid.vsize * float3(0.5f);
-  const int ntris   = int(tv0.size());
+  const float3 half   = grid.vsize * float3(0.5f);
+  const int    ntris  = int(tv0.size());
 
-  for (int t = 0; t < ntris; t++) {
-    /* Compute the range of voxel indices the triangle can touch */
-    int3 vmin, vmax;
-    for (int d = 0; d < 3; d++) {
-      const float lo = std::min({tv0[t][d], tv1[t][d], tv2[t][d]}) - half[d];
-      const float hi = std::max({tv0[t][d], tv1[t][d], tv2[t][d]}) + half[d];
-      vmin[d] = std::max(0, int(std::floor((lo - grid.origin[d]) / grid.vsize[d])));
-      vmax[d] = std::min(grid.res[d] - 1,
-                         int(std::floor((hi - grid.origin[d]) / grid.vsize[d])));
-    }
+  threading::parallel_for(IndexRange(ntris), 64, [&](IndexRange range) {
+    for (const int t : range) {
+      int3 vmin, vmax;
+      for (int d = 0; d < 3; d++) {
+        const float lo = std::min(std::min(tv0[t][d], tv1[t][d]), tv2[t][d]) - half[d];
+        const float hi = std::max(std::max(tv0[t][d], tv1[t][d]), tv2[t][d]) + half[d];
+        vmin[d] = std::max(0,             int(std::floor((lo - grid.origin[d]) / grid.vsize[d])));
+        vmax[d] = std::min(grid.res[d]-1, int(std::floor((hi - grid.origin[d]) / grid.vsize[d])));
+      }
 
-    for (int iz = vmin.z; iz <= vmax.z; iz++) {
-      for (int iy = vmin.y; iy <= vmax.y; iy++) {
-        for (int ix = vmin.x; ix <= vmax.x; ix++) {
-          const int vidx = grid.idx(ix, iy, iz);
+      for (int iz = vmin.z; iz <= vmax.z; iz++) {
+        for (int iy = vmin.y; iy <= vmax.y; iy++) {
+          for (int ix = vmin.x; ix <= vmax.x; ix++) {
+            const int vidx = grid.idx(ix, iy, iz);
+            /* Both checks avoid the SAT test when not needed */
+            if (grid.state[vidx] != VoxelState::Interior) continue;
 
-          if (grid.state[vidx] == VoxelState::Exterior  ||
-              grid.state[vidx] == VoxelState::Boundary)
-          {
-            continue;
-          }
-
-          const float3 center = grid.origin +
-                                (float3(int3(ix, iy, iz)) + float3(0.5f)) * grid.vsize;
-
-          if (sat_tri_box(center, half, tv0[t], tv1[t], tv2[t])) {
-            grid.state[vidx] = VoxelState::Boundary;
+            const float3 center = grid.origin +
+                                  (float3(int3(ix, iy, iz)) + float3(0.5f)) * grid.vsize;
+            if (sat_tri_box(center, half, tv0[t], tv1[t], tv2[t])) {
+              /* Benign race: two threads write identical value to same byte */
+              grid.state[vidx] = VoxelState::Boundary;
+            }
           }
         }
       }
     }
-  }
+  });
 }
 
 /** \} */
@@ -2302,277 +2311,97 @@ static int nearest_non_exterior_voxel(const Grid &grid, int start_idx)
 /** \name Phase 4 — Weight computation (Section 6, Equations 7 & 8)
  * \{ */
 
-/**
- * Assign vertex weights from per-bone geodesic distance fields.
- *
- * Eq. 7: d_j^i = (d_v^i + |p_vertex − p_voxel|) / D
- * Eq. 8: ω_j^i = (1 / ((1−α)·d + α·d²))²
- */
-static void assign_weights(Object *ob,
-                            Mesh *mesh,
-                            Span<float3> world_verts,
-                            int numbones,
-                            bDeformGroup **dgrouplist,
-                            bDeformGroup **dgroupflip,
-                            const bool *selected,
-                            Span<Array<float>> bone_dists,
-                            const Grid &grid,
-                            Span<float3> bone_root,
-                            Span<float3> bone_tip)
+static void process_bones_sequential(Object *ob,
+                                     Mesh *mesh,
+                                     Span<float3> world_verts,
+                                     int numbones,
+                                     bDeformGroup **dgrouplist,
+                                     bDeformGroup **dgroupflip,
+                                     const bool *selected,
+                                     const Grid &grid,
+                                     Span<float3> bone_root,
+                                     Span<float3> bone_tip)
 {
-  using namespace bke;
-
+  const int nverts  = mesh->verts_num;
   const float inv_D = 1.0f / grid.diag;
   const float eps   = 1e-6f;
-  constexpr float alpha = 0.7f;
+  constexpr float alpha = 0.2f;
 
-  printf("[GVB] assign_weights: verts=%d  bones=%d  diag=%.4f\n",
-         mesh->verts_num, numbones, grid.diag);
-
-  /* --- Bone sanity check --- */
-  int bones_active = 0;
+  /* Accumulate raw weights per vertex per bone before normalization */
+  Array<Array<float>> raw(numbones);
   for (int j = 0; j < numbones; j++) {
-    const bool sel   = selected[j];
-    const bool has_g = (dgrouplist[j] != nullptr);
-    const bool has_d = !bone_dists[j].is_empty();
-
-    
-    printf("[GVB]   bone[%d]: selected=%d  dgroup=%d  dist_field=%d\n",
-           j, (int)sel, (int)has_g, (int)has_d);
-    if (sel && has_g && has_d) bones_active++;
-  }
-  printf("[GVB] active bones (selected+group+dist): %d\n", bones_active);
-
-  if (bones_active == 0) {
-    printf("[GVB] ABORT: no active bones — nothing to assign\n");
-    return;
+    if (!selected[j] || !dgrouplist[j]) continue;
+    raw[j] = Array<float>(nverts, 0.0f);
   }
 
-  /* --- Mask build --- */
-  const bool use_vert_sel = (mesh->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
-  const bool use_face_sel = (mesh->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
-  const bool in_wpaint    = (ob->mode & OB_MODE_WEIGHT_PAINT) != 0;
+  /* Reuse one distance field buffer per bone — peak = 1 × grid.total() */
+  Array<float> dist(grid.total());
 
-  printf("[GVB] mode: weight_paint=%d  vert_sel=%d  face_sel=%d\n",
-         (int)in_wpaint, (int)use_vert_sel, (int)use_face_sel);
-
-  Array<bool> mask;
-  if (in_wpaint && (use_vert_sel || use_face_sel)) {
-    mask = Array<bool>(mesh->verts_num, false);
-
-    const AttributeAccessor  attributes   = mesh->attributes();
-    const OffsetIndices<int> faces        = mesh->faces();
-    const Span<int>          corner_verts = mesh->corner_verts();
-
-    if (use_vert_sel) {
-      const VArray select_vert = *attributes.lookup_or_default<bool>(
-          ".select_vert", AttrDomain::Point, false);
-      for (const int i : faces.index_range()) {
-        for (const int vert : corner_verts.slice(faces[i])) {
-          mask[vert] = select_vert[vert];
-        }
-      }
-    }
-    else if (use_face_sel) {
-      const VArray select_poly = *attributes.lookup_or_default<bool>(
-          ".select_poly", AttrDomain::Face, false);
-      for (const int i : faces.index_range()) {
-        if (select_poly[i]) {
-          for (const int vert : corner_verts.slice(faces[i])) {
-            mask[vert] = true;
-          }
-        }
-      }
-    }
-
-    int masked_count = 0;
-    for (int i = 0; i < mesh->verts_num; i++) {
-      if (mask[i]) masked_count++;
-    }
-    printf("[GVB] mask active: %d / %d vertices\n", masked_count, mesh->verts_num);
-
-    if (masked_count == 0) {
-      printf("[GVB] WARNING: mask built but zero vertices pass — "
-             "check selection in weight paint mode\n");
-    }
-  }
-  else {
-    printf("[GVB] no mask — all %d vertices eligible\n", mesh->verts_num);
-  }
-
-  /* --- Per-voxel state counts — know what the grid looks like --- */
-  {
-    int n_ext = 0, n_int = 0, n_bnd = 0;
-    for (int i = 0; i < grid.total(); i++) {
-      switch (grid.state[i]) {
-        case VoxelState::Exterior: n_ext++; break;
-        case VoxelState::Interior: n_int++; break;
-        case VoxelState::Boundary: n_bnd++; break;
-      }
-    }
-    printf("[GVB] grid %dx%dx%d  exterior=%d  interior=%d  boundary=%d\n",
-           grid.res.x, grid.res.y, grid.res.z, n_ext, n_int, n_bnd);
-
-    if (n_int + n_bnd == 0) {
-      printf("[GVB] ABORT: voxelization produced zero non-exterior voxels — "
-             "check mesh normals / voting step\n");
-      return;
-    }
-  }
-
-  /* --- Per-bone reachability check --- */
   for (int j = 0; j < numbones; j++) {
-    if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
+    if (!selected[j] || !dgrouplist[j]) continue;
 
-    int reachable = 0;
-    float min_d = FLT_MAX, max_d = 0.0f;
-    for (int i = 0; i < grid.total(); i++) {
-      const float d = bone_dists[j][i];
-      if (d >= 0.0f && d < FLT_MAX) {
-        reachable++;
-        min_d = std::min(min_d, d);
-        max_d = std::max(max_d, d);
-      }
-    }
-    printf("[GVB]   bone[%d] dist field: reachable_voxels=%d  "
-           "min_dist=%.4f  max_dist=%.4f\n",
-           j, reachable, min_d, max_d);
-
-    if (reachable == 0) {
-      printf("[GVB]   bone[%d] WARNING: Dijkstra reached zero voxels — "
-             "bone may lie entirely outside the voxelized volume\n", j);
-    }
-  }
-
-  /* --- Main vertex loop with sample logging --- */
-  Array<float> weights(numbones);
-
-  int verts_written    = 0;
-  int verts_no_weight  = 0;
-  int verts_masked     = 0;
-  int verts_exterior   = 0;
-
-  for (const int vi : IndexRange(mesh->verts_num)) {
-
-    if (!mask.is_empty() && !mask[vi]) {
-      verts_masked++;
-      continue;
+    {
+      GVBTimer bt("  Dijkstra bone");
+      dijkstra(grid, dist, bone_root[j], bone_tip[j]);
     }
 
-    const float3 &p_vert   = world_verts[vi];
-    const int     vidx_raw = grid.world_to_idx(p_vert);
-    const int     vidx     = nearest_non_exterior_voxel(grid, vidx_raw);
+    for (int vi = 0; vi < nverts; vi++) {
+      const float3 &p = world_verts[vi];
+      const int vidx  = nearest_non_exterior_voxel(grid, grid.world_to_idx(p));
 
-    if (grid.state[vidx] == VoxelState::Exterior) {
-      verts_exterior++;
-      /* Log first few exterior failures so we can see where they are */
-      if (verts_exterior <= 5) {
-        printf("[GVB]   vert[%d] stuck in exterior voxel  "
-               "pos=(%.3f %.3f %.3f)  vidx=%d\n",
-               vi, p_vert.x, p_vert.y, p_vert.z, vidx);
-      }
-      continue;
-    }
-
-    const float3 p_vox   = grid.voxel_center(vidx);
-    const float  sub_vox = math::distance(p_vert, p_vox);
-
-    float weight_sum = 0.0f;
-    weights.fill(0.0f);
-
-    for (int j = 0; j < numbones; j++) {
-      if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
-
-      float d_v = bone_dists[j][vidx];
+      float d_v = dist[vidx];
 
       if (d_v < 0.0f || d_v == FLT_MAX) {
-        /* Geodesic unavailable (exterior voxel, disconnected region, voxelization gap).
-        * Fall back to Euclidean distance to the bone segment so the whole
-        * mesh is always covered. */
-        const float3 closest = closest_on_segment(p_vert, bone_root[j], bone_tip[j]);
-        d_v = math::distance(p_vert, closest);
-
-        if (vi < 5) {
-          printf("[GVB]     bone[%d] using Euclidean fallback  d_v=%.4f\n", j, d_v);
-        }
+        /* Euclidean fallback for exterior / disconnected verts */
+        const float3 cl = closest_on_segment(p, bone_root[j], bone_tip[j]);
+        d_v = math::distance(p, cl);
       }
 
-      const float d     = std::max((d_v + sub_vox) * inv_D, eps);
-      const float inner = std::max((1.0f - alpha) * d + alpha * d * d, eps);
-      const float w     = 1.0f / inner;
-      weights[j]        = w * w;
-      weight_sum       += weights[j];
+      const float3 p_vox  = grid.voxel_center(vidx);
+      const float  sub_vox = math::distance(p, p_vox);
+      const float  d       = std::max((d_v + sub_vox) * inv_D, eps);
+      const float  inner   = std::max((1.0f - alpha) * d + alpha * d * d, eps);
+      const float  w       = 1.0f / inner;
+      raw[j][vi]           = w * w;
     }
 
-    /* Log first few vertices so we can see actual weight values */
-    if (vi < 5) {
-      printf("[GVB]   vert[%d] vidx=%d  sub_vox=%.4f  weight_sum=%.6f\n",
-             vi, vidx, sub_vox, weight_sum);
-      for (int j = 0; j < numbones; j++) {
-        if (weights[j] > 0.0f) {
-          printf("[GVB]     bone[%d] raw_w=%.6f  d_v=%.4f\n",
-                 j, weights[j], bone_dists[j][vidx]);
-        }
-      }
-    }
+    CLOG_INFO(&LOG, 2, "[GVB]   bone[%d] '%s' processed",
+              j, dgrouplist[j]->name);
+  }
 
-    if (weight_sum < 1e-10f) {
-      verts_no_weight++;
-      continue;
-    }
+  /* Normalize and write */
+  const bool use_topo = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
-    const bool use_topo_mirror = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
+  for (int vi = 0; vi < nverts; vi++) {
+    float sum = 0.0f;
+    for (int j = 0; j < numbones; j++) {
+      if (raw[j].is_empty()) continue;
+      sum += raw[j][vi];
+    }
+    if (sum < 1e-10f) continue;
+
     const int vi_flip = dgroupflip ?
-        mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo_mirror) : -1;
+        mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo) : -1;
 
     for (int j = 0; j < numbones; j++) {
-      if (!dgrouplist[j] || weights[j] == 0.0f) continue;
-
-      const float w = weights[j] / weight_sum;
+      if (raw[j].is_empty() || !dgrouplist[j]) continue;
+      const float w = raw[j][vi] / sum;
       if (w > 0.0f) {
         ed::object::vgroup_vert_add(ob, dgrouplist[j], vi, w, WEIGHT_REPLACE);
+      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
+      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
+        if (w > 0.0f) {
+        if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
+        if (w > 0.0f) {
+          ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
+        }
       }
       else {
         ed::object::vgroup_vert_remove(ob, dgrouplist[j], vi);
       }
-
-      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
-        if (w > 0.0f) {
-          ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
-        }
-        else {
-          ed::object::vgroup_vert_remove(ob, dgroupflip[j], vi_flip);
-        }
-      }
-    }
-
-    verts_written++;
-  }
-
-  printf("[GVB] assign_weights done: written=%d  no_weight=%d  "
-         "masked=%d  exterior=%d\n",
-         verts_written, verts_no_weight, verts_masked, verts_exterior);
-
-  if (verts_written == 0) {
-    printf("[GVB] RESULT: zero vertices received weights.\n");
-    if (verts_exterior > 0) {
-      printf("[GVB]   -> %d verts stuck in exterior voxels. "
-             "Voxelization may have failed (all exterior). "
-             "Check mesh scale and normals.\n", verts_exterior);
-    }
-    if (verts_no_weight > 0) {
-      printf("[GVB]   -> %d verts had zero weight sum. "
-             "Dijkstra seeds may not overlap non-exterior voxels.\n",
-             verts_no_weight);
-    }
-    if (verts_masked > 0) {
-      printf("[GVB]   -> %d verts were masked out. "
-             "All vertices may be deselected in weight paint mode.\n",
-             verts_masked);
     }
   }
 }
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -2637,13 +2466,12 @@ void geodesic_voxel_bone_weighting(Object *ob,
 {
   *r_error_str = nullptr;
 
-  /* --- printfs that only need mesh + numbones (declared above) --- */
-  printf("[GVB] === geodesic_voxel_bone_weighting start ===\n");
-  printf("[GVB] verts_num=%d  numbones=%d\n", mesh->verts_num, numbones);
+  const double t_total = BLI_time_now_seconds();
+  CLOG_INFO(&LOG, 1, "[GVB] === start  verts=%d  bones=%d ===",
+            mesh->verts_num, numbones);
 
   /* --- Span wrappers — declared here, printfs using them come after --- */
-  const Span<float3> verts_span(reinterpret_cast<const float3 *>(verts),
-                                 mesh->verts_num);
+  const Span<float3> verts_span(reinterpret_cast<const float3 *>(verts), mesh->verts_num);
   const Span<float3> root_span(reinterpret_cast<const float3 *>(root), numbones);
   const Span<float3> tip_span(reinterpret_cast<const float3 *>(tip),   numbones);
 
@@ -2669,109 +2497,67 @@ void geodesic_voxel_bone_weighting(Object *ob,
   grid.diag   = math::length(extent);
   grid.state  = Array<VoxelState>(grid.total(), VoxelState::Exterior);
 
-  /* --- printfs that need grid — AFTER grid is declared --- */
-  printf("[GVB] bbox min=(%.3f %.3f %.3f)  max=(%.3f %.3f %.3f)\n",
-         bbox_min.x, bbox_min.y, bbox_min.z,
-         bbox_max.x, bbox_max.y, bbox_max.z);
-  printf("[GVB] grid origin=(%.3f %.3f %.3f)  vsize=(%.4f %.4f %.4f)  diag=%.4f\n",
-         grid.origin.x, grid.origin.y, grid.origin.z,
-         grid.vsize.x,  grid.vsize.y,  grid.vsize.z,
-         grid.diag);
+  CLOG_INFO(&LOG, 1, "[GVB] grid %dx%dx%d  vsize=(%.4f %.4f %.4f)  diag=%.4f  mem=%.1f MB",
+            res.x, res.y, res.z,
+            grid.vsize.x, grid.vsize.y, grid.vsize.z,
+            grid.diag,
+            double(grid.total() * sizeof(float)) / (1024.0 * 1024.0));
 
-  /* --- Phase 1 --- */
-  printf("[GVB] Phase 1: building triangle list...\n");
-  const TriList tris = build_tris(mesh, verts_span);
-  printf("[GVB] Phase 1: triangles=%d\n", tris.size());
+  /* Phase 1 — Voxelization */
+  TriList tris;
+  {
+    GVBTimer t("Phase 1 triangulate");
+    tris = build_tris(mesh, verts_span);
+  }
+  CLOG_INFO(&LOG, 1, "[GVB] triangles: %d", tris.size());
 
   if (tris.size() == 0) {
-    printf("[GVB] ABORT: no triangles after fan triangulation\n");
-    *r_error_str = "GVB: mesh produced no triangles after fan triangulation";
+    *r_error_str = "GVB: mesh produced no triangles";
     return;
   }
 
-  printf("[GVB] Phase 1: voxelizing...\n");
-  voxelize(grid, tris.v0, tris.v1, tris.v2);
-
-  /* Count voxel states after voxelization */
   {
-    int n_ext = 0, n_int = 0, n_bnd = 0;
+    GVBTimer t("Phase 1 voxelize");
+    voxelize(grid, tris.v0, tris.v1, tris.v2);
+  }
+
+  {
+    int n_ext = 0, n_int = 0;
     for (int i = 0; i < grid.total(); i++) {
-      switch (grid.state[i]) {
-        case VoxelState::Exterior: n_ext++; break;
-        case VoxelState::Interior: n_int++; break;
-        case VoxelState::Boundary: n_bnd++; break;
-      }
+      if (grid.state[i] == VoxelState::Exterior) n_ext++;
+      else n_int++;
     }
-    printf("[GVB] Phase 1 done: exterior=%d  interior=%d  boundary=%d\n",
-           n_ext, n_int, n_bnd);
-    if (n_int + n_bnd == 0) {
-      printf("[GVB] ABORT: voxelization produced zero non-exterior voxels\n");
-      *r_error_str = "GVB: voxelization failed — no interior voxels found";
+    CLOG_INFO(&LOG, 1, "[GVB] voxelize result: interior=%d  exterior=%d", n_int, n_ext);
+    if (n_int == 0) {
+      *r_error_str = "GVB: voxelization failed — no interior voxels";
       return;
     }
   }
 
-  /* --- Phase 2 --- */
-  printf("[GVB] Phase 2: marking boundary voxels...\n");
-  mark_boundary(grid, tris.v0, tris.v1, tris.v2);
+  /* Phase 2 — Boundary */
+  {
+    GVBTimer t("Phase 2 boundary");
+    mark_boundary(grid, tris.v0, tris.v1, tris.v2);
+  }
 
   {
     int n_bnd = 0;
     for (int i = 0; i < grid.total(); i++) {
       if (grid.state[i] == VoxelState::Boundary) n_bnd++;
     }
-    printf("[GVB] Phase 2 done: boundary_voxels=%d\n", n_bnd);
+    CLOG_INFO(&LOG, 1, "[GVB] boundary voxels: %d", n_bnd);
   }
 
-  /* --- Phase 3 — Dijkstra per bone --- */
-  printf("[GVB] Phase 3: allocating distance fields...\n");
-  Array<Array<float>> bone_dists(numbones);
-
-  for (int j = 0; j < numbones; j++) {
-    const bool sel   = selected[j];
-    const bool has_g = (dgrouplist[j] != nullptr);
-    printf("[GVB]   bone[%d]: selected=%d  dgroup=%d\n", j, (int)sel, (int)has_g);
-    if (!sel || !has_g) continue;
-    bone_dists[j] = Array<float>(grid.total(), 0.0f);
+  /* Phase 3+4 — Dijkstra + weight assignment (sequential, one bone at a time) */
+  {
+    GVBTimer t("Phase 3+4 bones+weights");
+    process_bones_sequential(ob, mesh, verts_span, numbones,
+                             dgrouplist, dgroupflip, selected,
+                             grid, root_span, tip_span);
   }
 
-  threading::parallel_for(IndexRange(numbones), 1, [&](IndexRange range) {
-    for (const int j : range) {
-      if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
-      printf("[GVB]   bone[%d] Dijkstra start  root=(%.3f %.3f %.3f)  tip=(%.3f %.3f %.3f)\n",
-             j,
-             root_span[j].x, root_span[j].y, root_span[j].z,
-             tip_span[j].x,  tip_span[j].y,  tip_span[j].z);
-      dijkstra(grid, bone_dists[j], root_span[j], tip_span[j]);
-
-      /* Count reachable voxels after Dijkstra */
-      int reachable = 0;
-      float min_d = FLT_MAX, max_d = 0.0f;
-      for (int i = 0; i < grid.total(); i++) {
-        const float d = bone_dists[j][i];
-        if (d >= 0.0f && d < FLT_MAX) {
-          reachable++;
-          min_d = std::min(min_d, d);
-          max_d = std::max(max_d, d);
-        }
-      }
-      printf("[GVB]   bone[%d] Dijkstra done: reachable=%d  min_d=%.4f  max_d=%.4f\n",
-             j, reachable, min_d, max_d);
-      if (reachable == 0) {
-        printf("[GVB]   bone[%d] WARNING: Dijkstra reached zero voxels — "
-               "bone may be outside the voxelized volume\n", j);
-      }
-    }
-  });
-  printf("[GVB] Phase 3: done\n");
-
-  /* --- Phase 4 --- */
-  printf("[GVB] Phase 4: assigning weights...\n");
-  assign_weights(ob, mesh, verts_span, numbones,
-                 dgrouplist, dgroupflip, selected,
-                 bone_dists, grid, root_span, tip_span);
-  printf("[GVB] Phase 4: done\n");
-  printf("[GVB] === geodesic_voxel_bone_weighting end ===\n");
+  CLOG_INFO(&LOG, 1, "[GVB] === total: %.1f ms ===",
+            (BLI_time_now_seconds() - t_total) * 1000.0);
 }
 
 }  // namespace blender
