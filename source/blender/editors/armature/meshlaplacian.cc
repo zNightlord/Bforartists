@@ -12,6 +12,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
+#include "BLI_array.hh"
 #include "BLI_heap.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
@@ -24,6 +25,7 @@
 #include "BLI_memarena.hh"
 #include "BLI_ordered_edge.hh"
 #include "BLI_string_utf8.hh"
+#include "BLI_task.hh"
 
 #include "BLT_translation.hh"
 
@@ -38,6 +40,8 @@
 #include "ED_object_vgroup.hh"
 
 #include "eigen_capi.h"
+#include "CLG_log.h"
+#include "PIL_time.h"
 
 #include "meshlaplacian.h"
 
@@ -1808,6 +1812,29 @@ void ED_mesh_deform_bind_callback(Object *object,
 /** \name Voxel grid
  * \{ */
 
+
+static CLG_LogRef LOG = {"ed.armature.gvb"};
+
+struct GVBTimer {
+  const char *phase;
+  double      t0;
+
+  explicit GVBTimer(const char *phase) : phase(phase), t0(PIL_check_seconds_timer())
+  {
+    CLOG_INFO(&LOG, 1, "[GVB] %s start", phase);
+  }
+
+  double ms() const
+  {
+    return (PIL_check_seconds_timer() - t0) * 1000.0;
+  }
+
+  ~GVBTimer()
+  {
+    CLOG_INFO(&LOG, 1, "[GVB] %s done: %.1f ms", phase, ms());
+  }
+};
+
 enum class VoxelState : uint8_t {
   Exterior = 0,
   Interior = 1,
@@ -2289,7 +2316,9 @@ static void assign_weights(Object *ob,
                             bDeformGroup **dgroupflip,
                             const bool *selected,
                             Span<Array<float>> bone_dists,
-                            const Grid &grid)
+                            const Grid &grid,
+                            Span<float3> bone_root,
+                            Span<float3> bone_tip)
 {
   using namespace bke;
 
@@ -2306,6 +2335,8 @@ static void assign_weights(Object *ob,
     const bool sel   = selected[j];
     const bool has_g = (dgrouplist[j] != nullptr);
     const bool has_d = !bone_dists[j].is_empty();
+
+    
     printf("[GVB]   bone[%d]: selected=%d  dgroup=%d  dist_field=%d\n",
            j, (int)sel, (int)has_g, (int)has_d);
     if (sel && has_g && has_d) bones_active++;
@@ -2452,8 +2483,19 @@ static void assign_weights(Object *ob,
     for (int j = 0; j < numbones; j++) {
       if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
 
-      const float d_v = bone_dists[j][vidx];
-      if (d_v < 0.0f || d_v == FLT_MAX) continue;
+      float d_v = bone_dists[j][vidx];
+
+      if (d_v < 0.0f || d_v == FLT_MAX) {
+        /* Geodesic unavailable (exterior voxel, disconnected region, voxelization gap).
+        * Fall back to Euclidean distance to the bone segment so the whole
+        * mesh is always covered. */
+        const float3 closest = closest_on_segment(p_vert, bone_root[j], bone_tip[j]);
+        d_v = math::distance(p_vert, closest);
+
+        if (vi < 5) {
+          printf("[GVB]     bone[%d] using Euclidean fallback  d_v=%.4f\n", j, d_v);
+        }
+      }
 
       const float d     = std::max((d_v + sub_vox) * inv_D, eps);
       const float inner = std::max((1.0f - alpha) * d + alpha * d * d, eps);
@@ -2727,7 +2769,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
   printf("[GVB] Phase 4: assigning weights...\n");
   assign_weights(ob, mesh, verts_span, numbones,
                  dgrouplist, dgroupflip, selected,
-                 bone_dists, grid);
+                 bone_dists, grid, root_span, tip_span);
   printf("[GVB] Phase 4: done\n");
   printf("[GVB] === geodesic_voxel_bone_weighting end ===\n");
 }
