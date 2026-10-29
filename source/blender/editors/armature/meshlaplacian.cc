@@ -1821,7 +1821,7 @@ struct GVBTimer {
 
   explicit GVBTimer(const char *phase) : phase(phase), t0(BLI_time_now_seconds())
   {
-    GVB_LOG(&LOG, "[GVB] %s start", phase);
+    CLOG_INFO(&LOG, "[GVB] %s start", phase);
   }
 
   double ms() const
