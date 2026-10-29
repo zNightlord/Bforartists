@@ -2367,7 +2367,7 @@ static void process_bones_sequential(Object *ob,
       raw[j][vi]           = w * w;
     }
 
-    CLOG_INFO(&LOG, 2, "[GVB]   bone[%d] '%s' processed",
+    CLOG_INFO(&LOG, "[GVB]   bone[%d] '%s' processed",
               j, dgrouplist[j]->name);
   }
 
@@ -2472,7 +2472,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
   *r_error_str = nullptr;
 
   const double t_total = BLI_time_now_seconds();
-  CLOG_INFO(&LOG, 1, "[GVB] === start  verts=%d  bones=%d ===",
+  CLOG_INFO(&LOG, "[GVB] === start  verts=%d  bones=%d ===",
             mesh->verts_num, numbones);
 
   /* --- Span wrappers — declared here, printfs using them come after --- */
@@ -2502,7 +2502,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
   grid.diag   = math::length(extent);
   grid.state  = Array<VoxelState>(grid.total(), VoxelState::Exterior);
 
-  CLOG_INFO(&LOG, 1, "[GVB] grid %dx%dx%d  vsize=(%.4f %.4f %.4f)  diag=%.4f  mem=%.1f MB",
+  CLOG_INFO(&LOG, "[GVB] grid %dx%dx%d  vsize=(%.4f %.4f %.4f)  diag=%.4f  mem=%.1f MB",
             res.x, res.y, res.z,
             grid.vsize.x, grid.vsize.y, grid.vsize.z,
             grid.diag,
@@ -2514,7 +2514,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
     GVBTimer t("Phase 1 triangulate");
     tris = build_tris(mesh, verts_span);
   }
-  CLOG_INFO(&LOG, 1, "[GVB] triangles: %d", tris.size());
+  CLOG_INFO(&LOG, "[GVB] triangles: %d", tris.size());
 
   if (tris.size() == 0) {
     *r_error_str = "GVB: mesh produced no triangles";
@@ -2532,7 +2532,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
       if (grid.state[i] == VoxelState::Exterior) n_ext++;
       else n_int++;
     }
-    CLOG_INFO(&LOG, 1, "[GVB] voxelize result: interior=%d  exterior=%d", n_int, n_ext);
+    CLOG_INFO(&LOG, "[GVB] voxelize result: interior=%d  exterior=%d", n_int, n_ext);
     if (n_int == 0) {
       *r_error_str = "GVB: voxelization failed — no interior voxels";
       return;
@@ -2550,7 +2550,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
     for (int i = 0; i < grid.total(); i++) {
       if (grid.state[i] == VoxelState::Boundary) n_bnd++;
     }
-    CLOG_INFO(&LOG, 1, "[GVB] boundary voxels: %d", n_bnd);
+    CLOG_INFO(&LOG, "[GVB] boundary voxels: %d", n_bnd);
   }
 
   /* Phase 3+4 — Dijkstra + weight assignment (sequential, one bone at a time) */
@@ -2561,7 +2561,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
                              grid, root_span, tip_span);
   }
 
-  CLOG_INFO(&LOG, 1, "[GVB] === total: %.1f ms ===",
+  CLOG_INFO(&LOG, "[GVB] === total: %.1f ms ===",
             (BLI_time_now_seconds() - t_total) * 1000.0);
 }
 
