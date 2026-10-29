@@ -1821,7 +1821,7 @@ struct GVBTimer {
 
   explicit GVBTimer(const char *phase) : phase(phase), t0(BLI_time_now_seconds())
   {
-    CLOG_INFO(&LOG, 1, "[GVB] %s start", phase);
+    GVB_LOG(&LOG, "[GVB] %s start", phase);
   }
 
   double ms() const
@@ -1831,7 +1831,7 @@ struct GVBTimer {
 
   ~GVBTimer()
   {
-    CLOG_INFO(&LOG, 1, "[GVB] %s done: %.1f ms", phase, ms());
+    CLOG_INFO(&LOG, "[GVB] %s done: %.1f ms", phase, ms());
   }
 };
 
@@ -1955,6 +1955,8 @@ static void vote_axis(const Grid &grid,
   const int c        = (axis + 2) % 3;
   const uint8_t bit  = uint8_t(1u << axis);
   const int    ntris = int(tv0.size());
+  const int nu      = grid.res[b];
+  const int nv      = grid.res[c]; 
 
   /* Precompute per-triangle bounds in the perpendicular (b, c) plane */
   Array<float> tmin_b(ntris), tmax_b(ntris);
@@ -2375,8 +2377,7 @@ static void process_bones_sequential(Object *ob,
   for (int vi = 0; vi < nverts; vi++) {
     float sum = 0.0f;
     for (int j = 0; j < numbones; j++) {
-      if (raw[j].is_empty()) continue;
-      sum += raw[j][vi];
+      if (!raw[j].is_empty()) sum += raw[j][vi];
     }
     if (sum < 1e-10f) continue;
 
@@ -2385,23 +2386,23 @@ static void process_bones_sequential(Object *ob,
 
     for (int j = 0; j < numbones; j++) {
       if (raw[j].is_empty() || !dgrouplist[j]) continue;
+
       const float w = raw[j][vi] / sum;
+
       if (w > 0.0f) {
         ed::object::vgroup_vert_add(ob, dgrouplist[j], vi, w, WEIGHT_REPLACE);
-      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
-      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
-        if (w > 0.0f) {
-        if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
-        if (w > 0.0f) {
-          ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
-        }
       }
       else {
         ed::object::vgroup_vert_remove(ob, dgrouplist[j], vi);
       }
-    }
-  }
-}
+
+      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
+        if (w > 0.0f) {
+          ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
+        }
+        else {
+          ed::object::vgroup_vert_remove(ob, dgroupflip[j], vi_flip);
+        }
       }
     }
   }
