@@ -13,6 +13,7 @@
 #include "DNA_object_types.h"
 
 #include "BLI_array.hh"
+#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_heap.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
@@ -32,6 +33,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_bvhutils.hh"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_modifier.hh"
