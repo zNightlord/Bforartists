@@ -1815,6 +1815,10 @@ void ED_mesh_deform_bind_callback(Object *object,
 
 static CLG_LogRef LOG = {"ed.armature.gvb"};
 
+constexpr int   GVB_MAX_INFLUENCES = 4;     /* paper uses 4; raise to 6-8 if you see gaps */
+constexpr float GVB_CUTOFF_FRAC    = 0.3f;  /* geodesic search radius / bbox diagonal; <=0 disables */
+constexpr float GVB_ALPHA          = 0.7f;
+
 struct GVBTimer {
   const char *phase;
   double      t0;
@@ -1839,6 +1843,16 @@ enum class VoxelState : uint8_t {
   Exterior = 0,
   Interior = 1,
   Boundary = 2,
+};
+
+struct GVBScratch {
+  Array<float> dist;
+  Vector<int> cur, next;
+};
+
+struct GVBVertVoxel {
+  int vidx;
+  float sub_vox;
 };
 
 struct Grid {
@@ -2197,82 +2211,6 @@ static float3 closest_on_segment(const float3 &p, const float3 &a, const float3 
   return a + t * ab;
 }
 
-/**
- * Run Dijkstra from bone seeds through all non-exterior voxels.
- * Seeds are voxels whose centre lies within (half voxel diagonal) of the bone.
- * Step cost = Euclidean distance between voxel centres (6-connected).
- * Writes into `dist` (pre-allocated, size = grid.total()).
- * FLT_MAX = unreachable; -1.0f = exterior (skipped).
- */
-static void dijkstra(const Grid &grid,
-                     MutableSpan<float> dist,
-                     const float3 &bone_root,
-                     const float3 &bone_tip)
-{
-  /* Initialize */
-  for (int i = 0; i < grid.total(); i++) {
-    dist[i] = (grid.state[i] != VoxelState::Exterior) ? FLT_MAX : -1.0f;
-  }
-
-  /* Pre-compute 6 Euclidean step costs */
-  float step[6];
-  for (int n = 0; n < 6; n++) {
-    step[n] = math::length(float3(NBRS[n]) * grid.vsize);
-  }
-
-  /* Seed radius = half the voxel diagonal */
-  const float seed_radius = math::length(grid.vsize) * 0.5f;
-
-  Heap *heap = BLI_heap_new();
-
-  for (int iz = 0; iz < grid.res.z; iz++) {
-    for (int iy = 0; iy < grid.res.y; iy++) {
-      for (int ix = 0; ix < grid.res.x; ix++) {
-        const int vidx = grid.idx(ix, iy, iz);
-        if (grid.state[vidx] == VoxelState::Exterior) continue;
-
-        const float3 center   = grid.origin +
-                                (float3(int3(ix, iy, iz)) + float3(0.5f)) * grid.vsize;
-        const float3 closest  = closest_on_segment(center, bone_root, bone_tip);
-        const float  seg_dist = math::distance(center, closest);
-
-        if (seg_dist <= seed_radius) {
-          dist[vidx] = 0.0f;
-          BLI_heap_insert(heap, 0.0f, POINTER_FROM_INT(vidx));
-        }
-      }
-    }
-  }
-
-  /* Main Dijkstra loop — Algorithm 1 in the paper */
-  while (!BLI_heap_is_empty(heap)) {
-    const float cur_dist = BLI_heap_top_value(heap);
-    const int cur = POINTER_AS_INT(BLI_heap_pop_min(heap));
-
-    if (cur_dist > dist[cur] + 1e-6f) continue; /* stale heap entry */
-
-    const int cx =  cur % grid.res.x;
-    const int cy = (cur / grid.res.x) % grid.res.y;
-    const int cz =  cur / (grid.res.x * grid.res.y);
-
-    for (int n = 0; n < 6; n++) {
-      const int3 nc = int3(cx, cy, cz) + NBRS[n];
-      if (!grid.in_bounds(nc)) continue;
-
-      const int nidx = grid.idx(nc);
-      if (grid.state[nidx] == VoxelState::Exterior) continue;
-
-      const float new_dist = dist[cur] + step[n];
-      if (new_dist < dist[nidx]) {
-        dist[nidx] = new_dist;
-        BLI_heap_insert(heap, new_dist, POINTER_FROM_INT(nidx));
-      }
-    }
-  }
-
-  BLI_heap_free(heap, nullptr);
-}
-
 /** \} */
 
 static int nearest_non_exterior_voxel(const Grid &grid, int start_idx)
@@ -2313,100 +2251,338 @@ static int nearest_non_exterior_voxel(const Grid &grid, int start_idx)
 /** \name Phase 4 — Weight computation (Section 6, Equations 7 & 8)
  * \{ */
 
-static void process_bones_sequential(Object *ob,
-                                     Mesh *mesh,
-                                     Span<float3> world_verts,
-                                     int numbones,
-                                     bDeformGroup **dgrouplist,
-                                     bDeformGroup **dgroupflip,
-                                     const bool *selected,
-                                     const Grid &grid,
-                                     Span<float3> bone_root,
-                                     Span<float3> bone_tip)
+/* Force the outermost voxel layer to Exterior so the propagation loop
+ * can use flat index offsets without bounds checks. */
+static void clear_border_voxels(Grid &grid)
 {
-  const int nverts  = mesh->verts_num;
-  const float inv_D = 1.0f / grid.diag;
-  const float eps   = 1e-6f;
-  constexpr float alpha = 0.2f;
-
-  /* Accumulate raw weights per vertex per bone before normalization */
-  Array<Array<float>> raw(numbones);
-  for (int j = 0; j < numbones; j++) {
-    if (!selected[j] || !dgrouplist[j]) continue;
-    raw[j] = Array<float>(nverts, 0.0f);
-  }
-
-  /* Reuse one distance field buffer per bone — peak = 1 × grid.total() */
-  Array<float> dist(grid.total());
-
-  for (int j = 0; j < numbones; j++) {
-    if (!selected[j] || !dgrouplist[j]) continue;
-
-    {
-      GVBTimer bt("  Dijkstra bone");
-      dijkstra(grid, dist, bone_root[j], bone_tip[j]);
-    }
-
-    for (int vi = 0; vi < nverts; vi++) {
-      const float3 &p = world_verts[vi];
-      const int vidx  = nearest_non_exterior_voxel(grid, grid.world_to_idx(p));
-
-      float d_v = dist[vidx];
-
-      if (d_v < 0.0f || d_v == FLT_MAX) {
-        /* Euclidean fallback for exterior / disconnected verts */
-        const float3 cl = closest_on_segment(p, bone_root[j], bone_tip[j]);
-        d_v = math::distance(p, cl);
-      }
-
-      const float3 p_vox  = grid.voxel_center(vidx);
-      const float  sub_vox = math::distance(p, p_vox);
-      const float  d       = std::max((d_v + sub_vox) * inv_D, eps);
-      const float  inner   = std::max((1.0f - alpha) * d + alpha * d * d, eps);
-      const float  w       = 1.0f / inner;
-      raw[j][vi]           = w * w;
-    }
-
-    CLOG_INFO(&LOG, "[GVB]   bone[%d] '%s' processed",
-              j, dgrouplist[j]->name);
-  }
-
-  /* Normalize and write */
-  const bool use_topo = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
-
-  for (int vi = 0; vi < nverts; vi++) {
-    float sum = 0.0f;
-    for (int j = 0; j < numbones; j++) {
-      if (!raw[j].is_empty()) sum += raw[j][vi];
-    }
-    if (sum < 1e-10f) continue;
-
-    const int vi_flip = dgroupflip ?
-        mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo) : -1;
-
-    for (int j = 0; j < numbones; j++) {
-      if (raw[j].is_empty() || !dgrouplist[j]) continue;
-
-      const float w = raw[j][vi] / sum;
-
-      if (w > 0.0f) {
-        ed::object::vgroup_vert_add(ob, dgrouplist[j], vi, w, WEIGHT_REPLACE);
+  const int3 r = grid.res;
+  for (int z = 0; z < r.z; z++) {
+    for (int y = 0; y < r.y; y++) {
+      if (z == 0 || z == r.z - 1 || y == 0 || y == r.y - 1) {
+        for (int x = 0; x < r.x; x++) {
+          grid.state[grid.idx(x, y, z)] = VoxelState::Exterior;
+        }
       }
       else {
-        ed::object::vgroup_vert_remove(ob, dgrouplist[j], vi);
-      }
-
-      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
-        if (w > 0.0f) {
-          ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
-        }
-        else {
-          ed::object::vgroup_vert_remove(ob, dgroupflip[j], vi_flip);
-        }
+        grid.state[grid.idx(0, y, z)] = VoxelState::Exterior;
+        grid.state[grid.idx(r.x - 1, y, z)] = VoxelState::Exterior;
       }
     }
   }
 }
+
+/* Paper Algorithm 1: FIFO label-correcting propagation (not a heap).
+ * Returns the seed count (0 = bone never touched the volume). */
+static int propagate_distance(const Grid &grid,
+                              GVBScratch &s,
+                              const float3 &bone_root,
+                              const float3 &bone_tip,
+                              const float cutoff)
+{
+  MutableSpan<float> dist = s.dist;
+  dist.fill(FLT_MAX); /* exterior voxels are never relaxed, so they stay FLT_MAX */
+  s.cur.clear();
+  s.next.clear();
+
+  /* Seeds: only scan the segment's bounding box, not the whole grid. */
+  const float seed_r = math::length(grid.vsize) * 0.5f;
+  int3 vmin, vmax;
+  for (int d = 0; d < 3; d++) {
+    const float lo = std::min(bone_root[d], bone_tip[d]) - seed_r;
+    const float hi = std::max(bone_root[d], bone_tip[d]) + seed_r;
+    vmin[d] = std::max(0, int(std::floor((lo - grid.origin[d]) / grid.vsize[d])));
+    vmax[d] = std::min(grid.res[d] - 1, int(std::floor((hi - grid.origin[d]) / grid.vsize[d])));
+  }
+
+  int nseeds = 0;
+  for (int iz = vmin.z; iz <= vmax.z; iz++) {
+    for (int iy = vmin.y; iy <= vmax.y; iy++) {
+      for (int ix = vmin.x; ix <= vmax.x; ix++) {
+        const int vidx = grid.idx(ix, iy, iz);
+        if (grid.state[vidx] == VoxelState::Exterior) {
+          continue;
+        }
+        const float3 center = grid.origin +
+                              (float3(int3(ix, iy, iz)) + float3(0.5f)) * grid.vsize;
+        if (math::distance(center, closest_on_segment(center, bone_root, bone_tip)) <= seed_r) {
+          dist[vidx] = 0.0f;
+          s.cur.append(vidx);
+          nseeds++;
+        }
+      }
+    }
+  }
+
+  const int sx = 1, sy = grid.res.x, sz = grid.res.x * grid.res.y;
+  const int offs[6] = {-sx, sx, -sy, sy, -sz, sz};
+  const float steps[6] = {grid.vsize.x, grid.vsize.x,
+                          grid.vsize.y, grid.vsize.y,
+                          grid.vsize.z, grid.vsize.z};
+
+  while (!s.cur.is_empty()) {
+    for (const int v : s.cur) {
+      const float dv = dist[v];
+      for (int n = 0; n < 6; n++) {
+        const int nb = v + offs[n]; /* in range: border layer is Exterior */
+        if (grid.state[nb] == VoxelState::Exterior) {
+          continue;
+        }
+        const float nd = dv + steps[n];
+        if (nd < dist[nb] && nd <= cutoff) {
+          dist[nb] = nd;
+          s.next.append(nb);
+        }
+      }
+    }
+    std::swap(s.cur, s.next);
+    s.next.clear();
+  }
+  return nseeds;
+}
+
+static Array<bool> gvb_build_vertex_mask(const Object *ob, const Mesh *mesh)
+{
+  Array<bool> mask; /* empty = every vertex is eligible */
+  const bool use_vert_sel = (mesh->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
+  const bool use_face_sel = (mesh->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
+  if (!(ob->mode & OB_MODE_WEIGHT_PAINT) || !(use_vert_sel || use_face_sel)) {
+    return mask;
+  }
+  mask = Array<bool>(mesh->verts_num, false);
+  const bke::AttributeAccessor attributes = mesh->attributes();
+  if (use_vert_sel) {
+    const VArray select_vert = *attributes.lookup_or_default<bool>(
+        ".select_vert", bke::AttrDomain::Point, false);
+    for (const int i : IndexRange(mesh->verts_num)) {
+      mask[i] = select_vert[i];
+    }
+  }
+  else {
+    const VArray select_poly = *attributes.lookup_or_default<bool>(
+        ".select_poly", bke::AttrDomain::Face, false);
+    const OffsetIndices<int> faces = mesh->faces();
+    const Span<int> corner_verts = mesh->corner_verts();
+    for (const int i : faces.index_range()) {
+      if (select_poly[i]) {
+        for (const int vert : corner_verts.slice(faces[i])) {
+          mask[vert] = true;
+        }
+      }
+    }
+  }
+  return mask;
+}
+
+static void process_bones(Object *ob,
+                          Mesh *mesh,
+                          Span<float3> world_verts,
+                          int numbones,
+                          bDeformGroup **dgrouplist,
+                          bDeformGroup **dgroupflip,
+                          const bool *selected,
+                          const Grid &grid,
+                          Span<float3> bone_root,
+                          Span<float3> bone_tip)
+{
+  const int nverts = mesh->verts_num;
+  const float inv_D = 1.0f / grid.diag;
+  constexpr float eps = 1e-6f;
+  const float cutoff = (GVB_CUTOFF_FRAC > 0.0f) ? GVB_CUTOFF_FRAC * grid.diag : FLT_MAX;
+
+  Array<bool> active(numbones, false);
+  int num_active = 0;
+  bool has_flip = false;
+  for (int j = 0; j < numbones; j++) {
+    active[j] = selected[j] && dgrouplist[j] != nullptr;
+    num_active += active[j] ? 1 : 0;
+    has_flip |= active[j] && dgroupflip && dgroupflip[j] != nullptr;
+  }
+  if (num_active == 0) {
+    return;
+  }
+
+  const Array<bool> mask = gvb_build_vertex_mask(ob, mesh);
+  const bool use_mask = !mask.is_empty();
+
+  /* Eq. 7 + 8 */
+  const auto falloff = [&](const float d_geo, const float sub_vox) {
+    const float d = std::max((d_geo + sub_vox) * inv_D, eps);
+    const float inner = std::max((1.0f - GVB_ALPHA) * d + GVB_ALPHA * d * d, eps);
+    const float w = 1.0f / inner;
+    return w * w;
+  };
+
+  /* 1. Vertex -> voxel, once (was recomputed per bone). */
+  Array<GVBVertVoxel> vert_voxel(nverts);
+  {
+    GVBTimer t("  vertex->voxel");
+    threading::parallel_for(IndexRange(nverts), 2048, [&](const IndexRange range) {
+      for (const int vi : range) {
+        const int vidx = nearest_non_exterior_voxel(grid, grid.world_to_idx(world_verts[vi]));
+        vert_voxel[vi] = GVBVertVoxel{
+            vidx, math::distance(world_verts[vi], grid.voxel_center(vidx))};
+      }
+    });
+  }
+
+  /* 2. Bones in parallel. Each worker owns one dist buffer (~33 MB at 256x256x128)
+   *    and writes only raw[j], so there are no races. */
+  Array<Array<float>> raw(numbones);
+  for (int j = 0; j < numbones; j++) {
+    if (active[j]) {
+      raw[j] = Array<float>(nverts, 0.0f);
+    }
+  }
+
+  threading::EnumerableThreadSpecific<GVBScratch> scratch_tls;
+  {
+    GVBTimer t("  bones (parallel)");
+    threading::parallel_for(IndexRange(numbones), 1, [&](const IndexRange range) {
+      GVBScratch &s = scratch_tls.local();
+      if (s.dist.size() != grid.total()) {
+        s.dist = Array<float>(grid.total());
+      }
+      for (const int j : range) {
+        if (!active[j]) {
+          continue;
+        }
+        const double t0 = BLI_time_now_seconds();
+        const int nseeds = propagate_distance(grid, s, bone_root[j], bone_tip[j], cutoff);
+
+        MutableSpan<float> out = raw[j];
+        for (int vi = 0; vi < nverts; vi++) {
+          if (use_mask && !mask[vi]) {
+            continue;
+          }
+          const float d_v = s.dist[vert_voxel[vi].vidx];
+          if (d_v < FLT_MAX) {
+            out[vi] = falloff(d_v, vert_voxel[vi].sub_vox);
+          }
+          /* else: unreachable (cutoff / other component) -> weight stays 0 */
+        }
+        GVB_LOG("[GVB]   bone[%d] seeds=%d  %.1f ms",
+                j, nseeds, (BLI_time_now_seconds() - t0) * 1000.0);
+      }
+    });
+  }
+
+  /* 3. Top-N selection + direct MDeformVert writes (skips vgroup_vert_add's
+   *    per-call group lookup). */
+  GVBTimer t_write("  select + write");
+  MutableSpan<MDeformVert> dverts = mesh->deform_verts_for_write();
+
+  Array<int> def_nr(numbones, -1), def_nr_flip(numbones, -1);
+  for (int j = 0; j < numbones; j++) {
+    if (!active[j]) {
+      continue;
+    }
+    def_nr[j] = BKE_object_defgroup_name_index(ob, dgrouplist[j]->name);
+    if (dgroupflip && dgroupflip[j]) {
+      def_nr_flip[j] = BKE_object_defgroup_name_index(ob, dgroupflip[j]->name);
+    }
+  }
+
+  const auto clear_weight = [](MDeformVert &dv, const int nr) {
+    if (nr < 0) {
+      return;
+    }
+    if (MDeformWeight *dw = BKE_defvert_find_index(&dv, nr)) {
+      BKE_defvert_remove_group(&dv, dw);
+    }
+  };
+  const auto set_weight = [](MDeformVert &dv, const int nr, const float w) {
+    if (nr < 0) {
+      return;
+    }
+    if (MDeformWeight *dw = BKE_defvert_ensure_index(&dv, nr)) {
+      dw->weight = w;
+    }
+  };
+
+  const bool use_topo = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
+  int n_fallback = 0;
+
+  for (int vi = 0; vi < nverts; vi++) {
+    if (use_mask && !mask[vi]) {
+      continue;
+    }
+
+    int top_j[GVB_MAX_INFLUENCES];
+    float top_w[GVB_MAX_INFLUENCES];
+    int n = 0;
+    const auto push = [&](const int j, const float w) {
+      int pos;
+      if (n < GVB_MAX_INFLUENCES) {
+        pos = n++;
+      }
+      else if (w > top_w[GVB_MAX_INFLUENCES - 1]) {
+        pos = GVB_MAX_INFLUENCES - 1;
+      }
+      else {
+        return;
+      }
+      top_w[pos] = w;
+      top_j[pos] = j;
+      while (pos > 0 && top_w[pos] > top_w[pos - 1]) {
+        std::swap(top_w[pos], top_w[pos - 1]);
+        std::swap(top_j[pos], top_j[pos - 1]);
+        pos--;
+      }
+    };
+
+    for (int j = 0; j < numbones; j++) {
+      if (active[j] && raw[j][vi] > 0.0f) {
+        push(j, raw[j][vi]);
+      }
+    }
+
+    if (n == 0) {
+      /* No bone reached this vertex geodesically (disconnected piece, or beyond
+       * the cutoff of every bone): fall back to Euclidean distance. */
+      n_fallback++;
+      for (int j = 0; j < numbones; j++) {
+        if (!active[j]) {
+          continue;
+        }
+        const float3 cl = closest_on_segment(world_verts[vi], bone_root[j], bone_tip[j]);
+        push(j, falloff(math::distance(world_verts[vi], cl), 0.0f));
+      }
+      if (n == 0) {
+        continue;
+      }
+    }
+
+    float sum = 0.0f;
+    for (int k = 0; k < n; k++) {
+      sum += top_w[k];
+    }
+    const float inv_sum = 1.0f / sum;
+
+    MDeformVert &dv = dverts[vi];
+    const int vi_flip = has_flip ? mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo) : -1;
+    MDeformVert *dv_flip = (vi_flip >= 0) ? &dverts[vi_flip] : nullptr;
+
+    for (int j = 0; j < numbones; j++) {
+      if (!active[j]) {
+        continue;
+      }
+      clear_weight(dv, def_nr[j]);
+      if (dv_flip) {
+        clear_weight(*dv_flip, def_nr_flip[j]);
+      }
+    }
+    for (int k = 0; k < n; k++) {
+      const float w = top_w[k] * inv_sum;
+      set_weight(dv, def_nr[top_j[k]], w);
+      if (dv_flip) {
+        set_weight(*dv_flip, def_nr_flip[top_j[k]], w);
+      }
+    }
+  }
+
+  GVB_LOG("[GVB]   euclidean fallback verts: %d / %d", n_fallback, nverts);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -2488,10 +2664,11 @@ void geodesic_voxel_bone_weighting(Object *ob,
     bbox_max = math::max(bbox_max, v);
   }
 
-  const int3   res    = int3(GVB_DEFAULT_RES_X, GVB_DEFAULT_RES_Y, GVB_DEFAULT_RES_Z);
-  const float3 pad    = (bbox_max - bbox_min) / float3(res) + float3(1e-4f);
-  bbox_min -= pad;
-  bbox_max += pad;
+  const int3   res   = int3(GVB_DEFAULT_RES_X, GVB_DEFAULT_RES_Y, GVB_DEFAULT_RES_Z);
+  const float3 ext0  = math::max(bbox_max - bbox_min, float3(1e-4f));
+  const float3 vsz   = ext0 / float3(res - int3(4));   /* 2 voxels of padding per side */
+  bbox_min -= vsz * 2.0f;
+  bbox_max += vsz * 2.0f;
   const float3 extent = bbox_max - bbox_min;
 
   /* --- Grid init — declared here --- */
@@ -2524,6 +2701,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
   {
     GVBTimer t("Phase 1 voxelize");
     voxelize(grid, tris.v0, tris.v1, tris.v2);
+    clear_border_voxels(grid);   /* <-- new, before mark_boundary */
   }
 
   {
@@ -2556,9 +2734,8 @@ void geodesic_voxel_bone_weighting(Object *ob,
   /* Phase 3+4 — Dijkstra + weight assignment (sequential, one bone at a time) */
   {
     GVBTimer t("Phase 3+4 bones+weights");
-    process_bones_sequential(ob, mesh, verts_span, numbones,
-                             dgrouplist, dgroupflip, selected,
-                             grid, root_span, tip_span);
+    process_bones(ob, mesh, verts_span, numbones, dgrouplist, dgroupflip,
+                  selected, grid, root_span, tip_span);
   }
 
   CLOG_INFO(&LOG, "[GVB] === total: %.1f ms ===",
