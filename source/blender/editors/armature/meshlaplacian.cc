@@ -2462,7 +2462,7 @@ static void process_bones(Object *ob,
           }
           /* else: unreachable (cutoff / other component) -> weight stays 0 */
         }
-        GVB_LOG("[GVB]   bone[%d] seeds=%d  %.1f ms",
+        CLOG_INFO(&LOG, "[GVB]   bone[%d] seeds=%d  %.1f ms",
                 j, nseeds, (BLI_time_now_seconds() - t0) * 1000.0);
       }
     });
@@ -2582,7 +2582,7 @@ static void process_bones(Object *ob,
     }
   }
 
-  GVB_LOG("[GVB]   euclidean fallback verts: %d / %d", n_fallback, nverts);
+  CLOG_INFO(&LOG, "[GVB]   euclidean fallback verts: %d / %d", n_fallback, nverts);
 }
 
 /** \} */
