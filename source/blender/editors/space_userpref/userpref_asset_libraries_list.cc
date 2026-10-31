@@ -299,6 +299,12 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
     RNA_int_set(&props, "index", BKE_preferences_asset_library_get_index(&U, active_library));
   }
 
+  props = sub.op("preferences.asset_library_move", "", ICON_TRIA_UP);
+  RNA_enum_set(&props, "direction ", 0);
+  props = sub.op("preferences.asset_library_move", "", ICON_TRIA_DOWN);
+  RNA_enum_set(&props, "direction ", 1);
+
+
   if (!active_idx_in_range) {
     return;
   }
