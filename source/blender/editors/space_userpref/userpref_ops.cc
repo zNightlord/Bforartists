@@ -401,7 +401,7 @@ static bUserAssetLibrary *asset_library_active_get()
   return static_cast<bUserAssetLibrary *>(BLI_findlink(&U.asset_libraries, list_index));
 }
 
-static bool asset_library_move_poll(bContext *C)
+static bool asset_library_move_poll(bContext /**C*/)
 {
   if (U.asset_libraries.is_empty()) {
     CTX_wm_operator_poll_msg_set(C, "There is no asset library to move");
