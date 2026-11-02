@@ -7,11 +7,12 @@
  */
 
 #define DNA_DEPRECATED_ALLOW
-
+#define DNA_GENFILE_VERSIONING_MACROS
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
 #include "DNA_genfile.h"
 #include "DNA_mesh_types.h"
+#undef DNA_GENFILE_VERSIONING_MACROS
 
 #include "ED_armature.hh"
 
@@ -43,7 +44,7 @@ void do_versions_after_linking_504(FileData * /*fd*/, Main * /*bmain*/)
    */
 }
 
-void blo_do_versions_504(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_504(FileData *fd, Library * /*lib*/, Main *bmain)
 {
   /* Disable "Set Background Value" input to keep old behavior of Deactivate Voxels node. */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 504, 1)) {
@@ -117,7 +118,7 @@ void blo_do_versions_504(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
            arm = static_cast<bArmature *>(arm->id.next))
       {
         for (EditBone &bone : *arm->edbo) {
-          if (bone && (bone->flag & BONE_NO_DEFORM)) {
+          if (bone && (bone.flag & BONE_NO_DEFORM)) {
             continue;
           }
 
