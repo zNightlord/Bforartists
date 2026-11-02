@@ -10,11 +10,15 @@
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
+#include "DNA_genfile.h"
 #include "DNA_mesh_types.h"
+
+#include "ED_armature.hh"
 
 #include "BLI_listbase.hh"
 #include "BLI_sys_types.hh"
 
+#include "BKE_armature.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
