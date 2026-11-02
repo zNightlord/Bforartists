@@ -5231,12 +5231,13 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem overlay_wpaint_vgroup_color_items[] = {
-      {V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF,
-       "COLORRAMP",
-       0,
-       "Ramp",
-       "Display the weights using a color ramp. "
-       "Color ramp can be edit in weight paint user preferences",
+      {
+          V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP,
+          "COLORRAMP",
+          0,
+          "Ramp",
+          "Display the weights using a color ramp. "
+          "Color ramp can be edit in weight paint user preferences",
       },
       {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
        "ACTIVE",

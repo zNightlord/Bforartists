@@ -223,7 +223,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
                             weight_state.defgroup_validmap ? weight_state.defgroup_len : 0);
 
   /* Handles nothing, Mesh or BMesh API cases.*/
-  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
+  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP) {
     vert_data.fill(float3(0.0f));
   }
   else if (mr.extract_type == MeshExtractType::Mesh) {

@@ -238,7 +238,8 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
     }
     else if (type == VBOType::VertexGroupWeight) {
       created_vbos[i] = extract_weights(mr, cache, mbc);
-    } else if (type == VBOType::VertexGroupBlendedColor) {
+    }
+    else if (type == VBOType::VertexGroupBlendedColor) {
       created_vbos[i] = extract_weight_vgroup_blended_color(mr, cache, mbc);
     }
     else if (type == VBOType::Orco) {

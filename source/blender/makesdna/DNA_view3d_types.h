@@ -359,7 +359,7 @@ ENUM_OPERATORS(eView3DOverlay_WPaintFlag)
 
 /** #View3DOverlay.wpaint_vgroup_color_mode */
 enum eV3D_Overlay_WPaint_VGroupColorMode : int {
-  V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF = 0,
+  V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP = 0,
   V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE = 1,
   V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL = 2,
 };
@@ -643,7 +643,7 @@ struct View3DOverlay {
   eView3DOverlay_WPaintFlag wpaint_flag = {};
   /* Weight paint color mode settings. */
   eV3D_Overlay_WPaint_VGroupColorMode wpaint_vgroup_color_mode =
-      V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF;
+      V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP;
 
   /** Alpha for texture, weight, vertex paint overlay. */
   float texture_paint_mode_opacity = 1.0f;
