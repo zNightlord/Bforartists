@@ -1391,8 +1391,7 @@ static PyObject *bpy_bmesh_to_mesh(BPy_BMesh *self, PyObject *args)
      * anything in this case. */
   }
   else {
-    BLI_assert(BKE_id_is_in_global_main(&mesh->id));
-    bmain = G_MAIN; /* XXX UGLY! */
+    bmain = mesh->id.owner_bmain_for_write();
     params.calc_object_remap = true;
   }
 
@@ -5770,7 +5769,7 @@ char *BPy_BMElem_StringFromHType_ex(const char htype, char ret[32])
     ret_array[i++] = BPy_BMLoop_Type.tp_name;
   }
   ret[0] = '(';
-  int ret_ofs = BLI_string_join_array_by_sep_char(ret + 1, 30, '/', ret_array, i) + 1;
+  int ret_ofs = BLI_string_join_array_by_sep_char(MutableCStr(ret + 1, 30), '/', ret_array, i) + 1;
   ret[ret_ofs] = ')';
   ret[ret_ofs + 1] = '\0';
   return ret;

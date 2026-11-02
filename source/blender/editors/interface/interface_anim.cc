@@ -201,7 +201,7 @@ bool button_anim_decorate_pushed_state(ButtonDecorator *but)
   return (but_anim->flag & BUT_ANIMATED_KEY) != 0;
 }
 
-bool button_anim_expression_get(Button *but, char *str, size_t str_maxncpy)
+bool button_anim_expression_get(Button *but, std::optional<MutableCStr> str)
 {
   FCurve *fcu;
   ChannelDriver *driver;
@@ -214,7 +214,7 @@ bool button_anim_expression_get(Button *but, char *str, size_t str_maxncpy)
 
     if (driver && driver->type == DRIVER_TYPE_PYTHON) {
       if (str) {
-        BLI_strncpy_utf8(str, driver->expression, str_maxncpy);
+        STRNCPY_UTF8(*str, driver->expression);
       }
       return true;
     }
@@ -316,7 +316,7 @@ bool button_anim_expression_create(Button *but, const char *str)
       /* updates */
       BKE_driver_invalidate_expression(driver, true, false);
       DEG_relations_tag_update(CTX_data_main(C));
-      WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME, nullptr);
+      WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, nullptr);
       ok = true;
     }
   }

@@ -69,6 +69,7 @@
 #include "RNA_access.hh"
 
 #include "BLO_read_write.hh"
+#include "BLO_readfile.hh"
 
 #include "atomic_ops.h"
 
@@ -129,8 +130,7 @@ IDTypeInfo IDType_ID_LINK_PLACEHOLDER = {
  * absolute, in which case it is not altered.
  */
 static bool lib_id_library_local_paths_callback(BPathForeachPathData *bpath_data,
-                                                char *path_dst,
-                                                size_t path_dst_maxncpy,
+                                                MutableCStr path_dst,
                                                 const char *path_src)
 {
   const char **data = static_cast<const char **>(bpath_data->user_data);
@@ -153,7 +153,7 @@ static bool lib_id_library_local_paths_callback(BPathForeachPathData *bpath_data
      * because it won't work for paths that start with `//../` */
     BLI_path_normalize(filepath);
     BLI_path_rel(filepath, base_new);
-    BLI_strncpy(path_dst, filepath, path_dst_maxncpy);
+    STRNCPY(path_dst, filepath);
     return true;
   }
 
@@ -311,6 +311,10 @@ static void propagate_status_to_embedded_ids(ID &id)
     embedded_id.flag |= (id.flag & FLAGS_TO_SYNC);
     embedded_id.tag &= ~TAGS_TO_SYNC;
     embedded_id.tag |= (id.tag & TAGS_TO_SYNC);
+
+    BKE_libblock_runtime_ensure(embedded_id);
+    BLI_assert(id.runtime);
+    embedded_id.runtime->owner_bmain = id.runtime->owner_bmain;
   };
 
   bNodeTree *ntree = bke::node_tree_from_id(&id);
@@ -510,6 +514,21 @@ void BKE_id_newptr_and_tag_clear(ID *id)
     Collection *master_collection = (id_cast<Scene *>(id))->master_collection;
     if (master_collection != nullptr) {
       BKE_id_newptr_and_tag_clear(&master_collection->id);
+    }
+  }
+}
+
+void bke::id::id_lib_set(ID &id, Library *lib)
+{
+  id.lib = lib;
+  bNodeTree *ntree = node_tree_from_id(&id);
+  if (ntree) {
+    ntree->id.lib = lib;
+  }
+  if (GS(id.name) == ID_SCE) {
+    Scene &scene = reinterpret_cast<Scene &>(id);
+    if (scene.master_collection) {
+      scene.master_collection->id.lib = lib;
     }
   }
 }
@@ -969,7 +988,7 @@ void BKE_id_move_to_same_lib(Main &bmain, ID &id, const ID &owner_id)
 
   BKE_main_namemap_remove_id(bmain, id);
 
-  id.lib = owner_id.lib;
+  bke::id::id_lib_set(id, owner_id.lib);
   id.tag |= ID_TAG_INDIRECT;
 
   ListBaseT<ID> &lb = *which_libbase(&bmain, id.id_type());
@@ -1229,13 +1248,14 @@ void BKE_libblock_management_main_add(Main *bmain, void *idv)
       bool is_new_;
       Library *archive_lib = bke::library::ensure_archive_library(
           *bmain, *id, *id->lib, id->deep_hash, is_new_);
-      id->lib = archive_lib;
+      bke::id::id_lib_set(*id, archive_lib);
     }
   }
 
   ListBaseT<ID> *lb = which_libbase(bmain, id->id_type());
   BKE_main_lock(bmain);
   BLI_addtail(lb, id);
+  BKE_libblock_owner_bmain_set(*id, bmain);
   /* We need to allow adding extra datablocks into libraries too, e.g. to support generating new
    * overrides for recursive resync. */
   BKE_id_new_name_validate(*bmain, *lb, *id, nullptr, IDNewNameMode::RenameExistingNever, true);
@@ -1261,6 +1281,7 @@ void BKE_libblock_management_main_remove(Main *bmain, void *idv)
   ListBaseT<ID> *lb = which_libbase(bmain, id->id_type());
   BKE_main_lock(bmain);
   BLI_remlink(lb, id);
+  BKE_libblock_owner_bmain_set(*id, nullptr);
   BKE_main_namemap_remove_id(*bmain, *id);
   id->tag |= ID_TAG_NO_MAIN;
   bmain->is_memfile_undo_written = false;
@@ -1411,6 +1432,54 @@ void BKE_libblock_runtime_ensure(ID &id)
   }
 }
 
+void BKE_libblock_owner_bmain_set(ID &id, Main *bmain, const bool assert_contained)
+{
+  BKE_libblock_runtime_ensure(id);
+  /* Assert that the ID is actually in the given bmain by scanning it. This is fairly expensive and
+   * could slow down debug builds. If this turns out to be a problem, the assert can be removed.
+   * Until then, it's good to have the check to be more confident that the owner-bmain is set
+   * correctly. */
+  BLI_assert(!assert_contained || !bmain || BKE_id_is_in_main(bmain, &id));
+  UNUSED_VARS_NDEBUG(assert_contained);
+  id.runtime->owner_bmain = bmain;
+
+  if (BLO_readfile_id_runtime_tags(id).is_link_placeholder) {
+    return;
+  }
+
+  /* Update owner-id on embedded IDs too. */
+  bNodeTree *ntree = bke::node_tree_from_id(&id);
+  if (ntree != nullptr) {
+    BKE_libblock_owner_bmain_set(ntree->id, bmain, false);
+  }
+  if (id.id_type() == ID_SCE) {
+    Collection *master_collection = id_cast<Scene &>(id).master_collection;
+    if (master_collection != nullptr) {
+      BKE_libblock_owner_bmain_set(master_collection->id, bmain, false);
+    }
+  }
+}
+
+const Main *ID::owner_bmain() const
+{
+  BLI_assert(this->runtime);
+#ifndef NDEBUG
+  if (this->flag & ID_FLAG_EMBEDDED_DATA) {
+    if (const ID *owner_id = BKE_id_owner_get(const_cast<ID *>(this), false)) {
+      BLI_assert(owner_id->runtime);
+      BLI_assert(this->runtime->owner_bmain == owner_id->runtime->owner_bmain);
+    }
+  }
+#endif
+  return this->runtime->owner_bmain;
+}
+
+Main *ID::owner_bmain_for_write()
+{
+  BLI_assert(this->runtime);
+  return this->runtime->owner_bmain;
+}
+
 size_t BKE_libblock_get_alloc_info(short type, const char **r_name)
 {
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_idcode(type);
@@ -1499,6 +1568,7 @@ void *BKE_libblock_alloc_in_lib(Main *bmain,
 
       BKE_main_lock(bmain);
       BLI_addtail(lb, id);
+      BKE_libblock_owner_bmain_set(*id, bmain);
       BKE_id_new_name_validate(*bmain, *lb, *id, name, IDNewNameMode::RenameExistingNever, true);
       bmain->is_memfile_undo_written = false;
       /* alphabetic insertion: is in new_id */
@@ -1520,7 +1590,7 @@ void *BKE_libblock_alloc_in_lib(Main *bmain,
       }
     }
     else {
-      BLI_strncpy(id->name + 2, name, sizeof(id->name) - 2);
+      STRNCPY(MutableCStr(id->name).drop_front(2), name);
       id->lib = owner_library ? *owner_library : nullptr;
     }
 
@@ -1725,6 +1795,10 @@ void BKE_libblock_copy_in_lib(Main *bmain,
       if (*new_owner_id == nullptr) {
         /* If the new id does not have an owner, it's also not embedded. */
         new_id->flag &= ~ID_FLAG_EMBEDDED_DATA;
+      }
+      else if (new_id->flag & ID_FLAG_EMBEDDED_DATA) {
+        BKE_libblock_owner_bmain_set(
+            *new_id, const_cast<Main *>((*new_owner_id)->owner_bmain()), false);
       }
     }
   }
@@ -2064,13 +2138,13 @@ IDNewNameResult BKE_id_new_name_validate(Main &bmain,
     if (mode == IDNewNameMode::RenameExistingAlways ||
         (mode == IDNewNameMode::RenameExistingSameRoot && STREQ(prev_name_root, new_name_root)))
     {
-      BLI_strncpy(id_other->name + 2, name, sizeof(id_other->name) - 2);
+      STRNCPY(MutableCStr(id_other->name).drop_front(2), name);
       id_sort_by_name(&lb, id_other, nullptr);
 
       const bool is_idname_changed = !STREQ(BKE_id_name(id), orig_name);
       IDNewNameResult result = {IDNewNameResult::Action::UNCHANGED_COLLISION, id_other};
       if (is_idname_changed) {
-        BLI_strncpy(id.name + 2, orig_name, sizeof(id.name) - 2);
+        STRNCPY(MutableCStr(id.name).drop_front(2), orig_name);
         result.action = IDNewNameResult::Action::RENAMED_COLLISION_FORCED;
       }
       id_sort_by_name(&lb, &id, nullptr);
@@ -2087,7 +2161,7 @@ IDNewNameResult BKE_id_new_name_validate(Main &bmain,
 
   IDNewNameResult result = {IDNewNameResult::Action::UNCHANGED, nullptr};
   if (is_idname_changed) {
-    BLI_strncpy(id.name + 2, name, sizeof(id.name) - 2);
+    STRNCPY(MutableCStr(id.name).drop_front(2), name);
     result.action = had_name_collision ? IDNewNameResult::Action::RENAMED_COLLISION_ADJUSTED :
                                          IDNewNameResult::Action::RENAMED_NO_COLLISION;
   }
@@ -2758,11 +2832,6 @@ bool BKE_id_is_in_main(Main *bmain, ID *id)
   /* We do not want to fail when id is nullptr here, even though this is a bit strange behavior...
    */
   return (id == nullptr || BLI_findindex(which_libbase(bmain, id->id_type()), id) != -1);
-}
-
-bool BKE_id_is_in_global_main(ID *id)
-{
-  return BKE_id_is_in_main(G_MAIN, id);
 }
 
 bool BKE_id_can_be_asset(const ID *id)

@@ -1404,7 +1404,7 @@ static std::optional<std::string> rna_ImageFormatSettings_path(
               node->storage);
           if (match(&storage.format)) {
             char node_name_esc[sizeof(node->name) * 2];
-            BLI_str_escape(node_name_esc, node->name, sizeof(node_name_esc));
+            BLI_str_escape(node_name_esc, node->name);
             return fmt::format("nodes[\"{}\"].format", node_name_esc);
           }
           else {
@@ -1412,7 +1412,7 @@ static std::optional<std::string> rna_ImageFormatSettings_path(
               NodeCompositorFileOutputItem &item = storage.items[i];
               if (match(&item.format)) {
                 char node_name_esc[sizeof(node->name) * 2];
-                BLI_str_escape(node_name_esc, node->name, sizeof(node_name_esc));
+                BLI_str_escape(node_name_esc, node->name);
 
                 const std::string identifier = FileOutputItemsAccessor::socket_identifier_for_item(
                     item);
@@ -1489,7 +1489,7 @@ std::optional<std::string> rna_ColorManagedInputColorspaceSettings_path(const Po
 
       if (strip) {
         char name_esc[(sizeof(strip->name) - 2) * 2];
-        BLI_str_escape(name_esc, strip->name + 2, sizeof(name_esc));
+        BLI_str_escape(name_esc, strip->name + 2);
         return fmt::format("sequence_editor.strips_all[\"{}\"].colorspace_settings", name_esc);
       }
     }
@@ -2025,8 +2025,7 @@ void rna_ViewLayer_name_set(PointerRNA *ptr, const char *value)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
-  BLI_assert(BKE_id_is_in_global_main(&scene->id));
-  BKE_view_layer_rename(G_MAIN, scene, view_layer, value);
+  BKE_view_layer_rename(scene->id.owner_bmain_for_write(), scene, view_layer, value);
 }
 
 static void rna_SceneRenderView_name_set(PointerRNA *ptr, const char *value)
@@ -2092,10 +2091,9 @@ static std::optional<std::string> rna_ViewLayerEEVEE_path(const PointerRNA *ptr)
       offsetof(ViewLayer, eevee));
   char rna_path[sizeof(view_layer->name) * 3];
 
-  const size_t view_layer_path_len = rna_ViewLayer_path_buffer_get(
-      view_layer, rna_path, sizeof(rna_path));
+  const size_t view_layer_path_len = rna_ViewLayer_path_buffer_get(view_layer, rna_path);
 
-  BLI_strncpy(rna_path + view_layer_path_len, ".eevee", sizeof(rna_path) - view_layer_path_len);
+  STRNCPY(MutableCStr(rna_path).drop_front(view_layer_path_len), ".eevee");
 
   return rna_path;
 }
@@ -2149,7 +2147,7 @@ static std::optional<std::string> rna_SceneRenderView_path(const PointerRNA *ptr
 {
   const SceneRenderView *srv = static_cast<SceneRenderView *>(ptr->data);
   char srv_name_esc[sizeof(srv->name) * 2];
-  BLI_str_escape(srv_name_esc, srv->name, sizeof(srv_name_esc));
+  BLI_str_escape(srv_name_esc, srv->name);
   return fmt::format("render.views[\"{}\"]", srv_name_esc);
 }
 
@@ -2193,14 +2191,16 @@ static void rna_Scene_editmesh_select_mode_set(PointerRNA *ptr, const bool *valu
     ts->selectmode = selectmode;
 
     /* Update select mode in all the workspaces in mesh edit mode. */
-    wmWindowManager *wm = G_MAIN->wm.first();
+    const Main *bmain = ptr->owner_id->owner_bmain();
+    wmWindowManager *wm = bmain->wm.first();
+    if (!wm) {
+      return;
+    }
     for (wmWindow &win : wm->windows) {
       const Scene *scene = WM_window_get_active_scene(&win);
       ViewLayer *view_layer = WM_window_get_active_view_layer(&win);
       if (view_layer) {
-        /* FIXME Using G_MAIN is weak, but should work in practice given current context (code
-         * already relies on 'G_MAIN data'). */
-        BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
+        BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
         Object *object = BKE_view_layer_active_object_get(view_layer);
         if (object && object->type == OB_MESH) {
           if (BMEditMesh *em = BKE_editmesh_from_object(object)) {
@@ -2542,7 +2542,7 @@ static void rna_TimeLine_remove(Scene *scene, ReportList *reports, PointerRNA *m
     return;
   }
 
-  MEM_delete(marker);
+  BKE_free_time_marker(*marker, true);
   marker_ptr->invalidate();
 
   WM_main_add_notifier(NC_SCENE | ND_MARKERS, nullptr);
@@ -2551,7 +2551,7 @@ static void rna_TimeLine_remove(Scene *scene, ReportList *reports, PointerRNA *m
 
 static void rna_TimeLine_clear(Scene *scene)
 {
-  scene->markers.free_no_destruct();
+  BKE_free_time_markers(scene->markers, true);
 
   WM_main_add_notifier(NC_SCENE | ND_MARKERS, nullptr);
   WM_main_add_notifier(NC_ANIMATION | ND_MARKERS, nullptr);
@@ -4574,6 +4574,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
                          /* Tracked by edit-mode undo. */
                          PROP_FORCE_UNDO));
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_Scene_editmesh_select_mode_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Mesh Selection Mode", "Which mesh elements selection works on");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_Scene_editmesh_select_mode_update");
@@ -5239,6 +5240,7 @@ void rna_def_view_layer_common(BlenderRNA *brna, StructRNA *srna, const bool sce
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   if (scene) {
     RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ViewLayer_name_set");
+    RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   }
   else {
     RNA_def_property_string_sdna(prop, nullptr, "name");
@@ -7939,6 +7941,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "simplify_child_particles_render", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "simplify_particles_render");
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Simplify Child Particles", "Global child particles percentage during rendering");
   RNA_def_property_update(prop, 0, "rna_Scene_simplify_update");
@@ -8096,6 +8099,27 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
                            "Compositor Final Denoise Quality",
                            "The quality used by denoise nodes during the compositing of final "
                            "renders if the nodes' quality option is set to Follow Scene");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_Scene_compositor_update");
+
+  prop = RNA_def_property(srna, "compositor_proxy_use_preview_scale", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "compositor_proxy_flags", int(CompositorProxyFlags::UsePreviewScale));
+  RNA_def_property_ui_text(prop,
+                           "Compositor Proxy Use Preview Scale",
+                           "Scale down input media and pixel-unit values by the proxy preview "
+                           "scale during interactive compositor preview for better performance");
+  RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_Scene_compositor_update");
+
+  prop = RNA_def_property(srna, "compositor_proxy_preview_scale", PROP_INT, PROP_PERCENTAGE);
+  RNA_def_property_int_sdna(prop, nullptr, "compositor_proxy_preview_scale");
+  RNA_def_property_int_default(prop, 50);
+  RNA_def_property_range(prop, 5, 100);
+  RNA_def_property_ui_text(
+      prop,
+      "Compositor Proxy Preview Scale",
+      "The percentage of the render size which input media and pixel-unit values will be scaled "
+      "down to during interactive compositor preview for better performance, if proxy preview "
+      "scale is enabled");
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, "rna_Scene_compositor_update");
 
   prop = RNA_def_property(srna, "compositor_proxy_adapt_to_render_scale", PROP_BOOLEAN, PROP_NONE);

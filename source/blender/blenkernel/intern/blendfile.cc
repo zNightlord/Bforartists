@@ -173,13 +173,12 @@ bool BKE_blendfile_is_readable(const char *path, ReportList *reports)
  * \{ */
 
 static bool foreach_path_clean_cb(BPathForeachPathData * /*bpath_data*/,
-                                  char *path_dst,
-                                  size_t path_dst_maxncpy,
+                                  MutableCStr path_dst,
                                   const char *path_src)
 {
-  BLI_strncpy(path_dst, path_src, path_dst_maxncpy);
-  BLI_path_slash_native(path_dst);
-  return !STREQ(path_dst, path_src);
+  STRNCPY(path_dst, path_src);
+  BLI_path_slash_native(path_dst.data());
+  return !STREQ(path_dst.data(), path_src);
 }
 
 /* make sure path names are correct for OS */
@@ -379,8 +378,9 @@ static bool reuse_bmain_move_id(ReuseOldBMainData *reuse_data,
     BKE_main_namemap_remove_id(*old_bmain, *id);
   }
 
-  id->lib = lib;
+  bke::id::id_lib_set(*id, lib);
   BLI_addtail(new_lb, id);
+  BKE_libblock_owner_bmain_set(*id, new_bmain);
   if (handle_name_map_updates) {
     BKE_id_new_name_validate(
         *new_bmain, *new_lb, *id, nullptr, IDNewNameMode::RenameExistingNever, true);
@@ -641,7 +641,13 @@ static void swap_old_bmain_data_for_blendfile(ReuseOldBMainData *reuse_data, con
     remapper.add(discarded_id_iter, nullptr);
   }
 
+  for (ID &old_id : *old_lb) {
+    BKE_libblock_owner_bmain_set(old_id, old_bmain);
+  }
+
   FOREACH_MAIN_LISTBASE_ID_BEGIN (new_lb, reused_id_iter) {
+    BKE_libblock_owner_bmain_set(*reused_id_iter, new_bmain);
+
     /* Necessary as all `session_uid` are renewed on blendfile loading. */
     BKE_lib_libblock_session_uid_renew(reused_id_iter);
 
@@ -696,9 +702,11 @@ static void swap_wm_data_for_blendfile(ReuseOldBMainData *reuse_data, const bool
     /* Not strictly necessary, but helps for readability. */
     std::swap<wmWindowManager *>(old_wm, new_wm);
     BLI_addhead(new_wm_list, new_wm);
+    BKE_libblock_owner_bmain_set(new_wm->id, new_bmain);
     /* Do not add old WM back to `old_bmain`, so that it does not get freed when `old_bmain` is
      * freed. Calling WM code will need this old WM to restore some windows etc. data into the
      * new WM, and is responsible to free it properly. */
+    BKE_libblock_owner_bmain_set(old_wm->id, nullptr);
     reuse_data->wm_setup_data->old_wm = old_wm;
 
     id::IDRemapper &remapper = reuse_bmain_data_remapper_ensure(reuse_data);
@@ -1566,10 +1574,10 @@ UserDef *BKE_blendfile_userdef_from_defaults()
 
   /* System-specific fonts directory.
    * NOTE: when not found, leaves as-is (`//` for the blend-file directory). */
-  if (BKE_appdir_font_folder_default(userdef->fontdir, sizeof(userdef->fontdir))) {
+  if (BKE_appdir_font_folder_default(userdef->fontdir)) {
     /* Not actually needed, just a convention that directory selection
      * adds a trailing slash. */
-    BLI_path_slash_ensure(userdef->fontdir, sizeof(userdef->fontdir));
+    BLI_path_slash_ensure(userdef->fontdir);
   }
 
   userdef->memcachelimit = min_ii(BLI_system_memory_max_in_megabytes_int() / 2,
@@ -1692,7 +1700,7 @@ bool BKE_blendfile_userdef_write_all(ReportList *reports)
 
   if (cfgdir) {
     bool ok_write;
-    BLI_path_join(filepath, sizeof(filepath), cfgdir->c_str(), BLENDER_USERPREF_FILE);
+    BLI_path_join(filepath, cfgdir->c_str(), BLENDER_USERPREF_FILE);
     CLOG_INFO_NOCHECK(&LOG_BLEND, "Writing user preferences: \"%s\" ", filepath);
     if (use_template_userpref) {
       ok_write = BKE_blendfile_userdef_write_app_template(filepath, reports);
@@ -1718,7 +1726,7 @@ bool BKE_blendfile_userdef_write_all(ReportList *reports)
     cfgdir = BKE_appdir_folder_id_create(BLENDER_USER_CONFIG, U.app_template);
     if (cfgdir) {
       /* Also save app-template preferences. */
-      BLI_path_join(filepath, sizeof(filepath), cfgdir->c_str(), BLENDER_USERPREF_FILE);
+      BLI_path_join(filepath, cfgdir->c_str(), BLENDER_USERPREF_FILE);
 
       CLOG_INFO_NOCHECK(&LOG_BLEND, "Writing user preferences app-template: \"%s\" ", filepath);
       if (BKE_blendfile_userdef_write(filepath, reports) != 0) {
@@ -1970,7 +1978,7 @@ Library *PartialWriteContext::ensure_library(ID *ctx_id)
     }
   }
 
-  ctx_id->lib = ctx_lib;
+  bke::id::id_lib_set(*ctx_id, ctx_lib);
   return ctx_lib;
 }
 Library *PartialWriteContext::ensure_library(StringRefNull library_absolute_path)

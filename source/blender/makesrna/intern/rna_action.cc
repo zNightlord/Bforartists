@@ -95,6 +95,7 @@ const EnumPropertyItem default_ActionSlot_target_id_type_items[] = {
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
 
+#  include "BKE_animsys.hh"
 #  include "BKE_fcurve.hh"
 #  include "BKE_main.hh"
 #  include "BKE_report.hh"
@@ -294,7 +295,7 @@ static std::optional<std::string> rna_ActionSlot_path(const PointerRNA *ptr)
   animrig::Slot &slot = rna_data_slot(ptr);
 
   char identifier_esc[sizeof(slot.identifier) * 2];
-  BLI_str_escape(identifier_esc, slot.identifier, sizeof(identifier_esc));
+  BLI_str_escape(identifier_esc, slot.identifier);
   return fmt::format("slots[\"{}\"]", identifier_esc);
 }
 
@@ -396,7 +397,7 @@ static std::optional<std::string> rna_ActionLayer_path(const PointerRNA *ptr)
   animrig::Layer &layer = rna_data_layer(ptr);
 
   char name_esc[sizeof(layer.name) * 2];
-  BLI_str_escape(name_esc, layer.name, sizeof(name_esc));
+  BLI_str_escape(name_esc, layer.name);
   return fmt::format("layers[\"{}\"]", name_esc);
 }
 
@@ -909,7 +910,7 @@ static std::optional<std::string> rna_ActionGroup_path(const PointerRNA *ptr)
   BLI_assert_msg(channelbag_path, "ActionChannelbag instances should have an RNA path");
 
   char name_esc[sizeof(group->name) * 2];
-  BLI_str_escape(name_esc, group->name, sizeof(name_esc));
+  BLI_str_escape(name_esc, group->name);
 
   return fmt::format("{}.groups[\"{}\"]", *channelbag_path, name_esc);
 }
@@ -1042,7 +1043,7 @@ static void rna_Action_pose_markers_remove(bAction *act,
     return;
   }
 
-  MEM_delete(marker);
+  BKE_free_time_marker(*marker, true);
   marker_ptr->invalidate();
 }
 
@@ -1774,7 +1775,7 @@ static void rna_def_action_slots(BlenderRNA *brna, PropertyRNA *cprop)
                                   "Remove the slot from the Action, including all animation that "
                                   "is associated with that slot");
   parm = RNA_def_pointer(func, "action_slot", "ActionSlot", "Action Slot", "The slot to remove");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
 
 static void rna_def_action_layers(BlenderRNA *brna, PropertyRNA *cprop)
@@ -1812,7 +1813,7 @@ static void rna_def_action_layers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Remove the layer from the animation");
   parm = RNA_def_pointer(
       func, "anim_layer", "ActionLayer", "Animation Layer", "The layer to remove");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
 
 static void rna_def_action_slot(BlenderRNA *brna)
@@ -1963,7 +1964,7 @@ static void rna_def_ActionLayer_strips(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Remove the strip from the animation layer");
   parm = RNA_def_pointer(
       func, "anim_strip", "ActionStrip", "Animation Strip", "The strip to remove");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
 
 static void rna_def_action_layer(BlenderRNA *brna)
@@ -2056,7 +2057,7 @@ static void rna_def_keyframestrip_channelbags(BlenderRNA *brna, PropertyRNA *cpr
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func, "Remove the channelbag from the strip");
   parm = RNA_def_pointer(func, "channelbag", "ActionChannelbag", "", "The channelbag to remove");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
 
 /**

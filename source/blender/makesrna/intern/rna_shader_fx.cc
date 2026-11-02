@@ -154,7 +154,7 @@ static void rna_ShaderFx_name_set(PointerRNA *ptr, const char *value)
                            RNA_path_name_to_infix(oldname),
                            RNA_path_name_to_infix(gmd->name),
                            /*verify_paths=*/true,
-                           *G_MAIN);
+                           *ob->id.owner_bmain_for_write());
   }
 }
 
@@ -163,7 +163,7 @@ static std::optional<std::string> rna_ShaderFx_path(const PointerRNA *ptr)
   const ShaderFxData *gmd = static_cast<ShaderFxData *>(ptr->data);
   char name_esc[sizeof(gmd->name) * 2];
 
-  BLI_str_escape(name_esc, gmd->name, sizeof(name_esc));
+  BLI_str_escape(name_esc, gmd->name);
   return fmt::format("shader_effects[\"{}\"]", name_esc);
 }
 
@@ -683,6 +683,7 @@ void RNA_def_shader_fx(BlenderRNA *brna)
   /* strings */
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ShaderFx_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Name", "Effect name");
   RNA_def_property_update(prop, NC_OBJECT | ND_SHADERFX | NA_RENAME, nullptr);
   RNA_def_struct_name_property(srna, prop);

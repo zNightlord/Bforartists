@@ -507,7 +507,9 @@ if(WITH_PYTHON)
   # Install beside their bundled dependencies, found via each target's RPATH (UNIX)
   # or the `blender.shared` side-by-side assembly (WIN32).
   # Non-portable installs (UNIX system installs) place them beside the add-on.
-  if(WITH_INSTALL_PORTABLE)
+  # A Python module has no system libraries path, so it bundles them like a portable install,
+  # matching the lookup in the add-on's `library.py`.
+  if(WITH_INSTALL_PORTABLE OR WITH_PYTHON_MODULE)
     set(GLTF_BRIDGE_INSTALL_DIR "${TARGETDIR_LIB}")
   else()
     set(GLTF_BRIDGE_INSTALL_DIR "${TARGETDIR_VER_LIBS}/scripts/addons_core/io_scene_gltf2")
@@ -1609,8 +1611,7 @@ elseif(WIN32)
 
   endif()
 
-  # Filenames change slightly between FFMPEG versions check both 6.0 and fallback to 5.0
-  # to ease the transition between versions.
+  # Install the DLLs matching the bundled FFmpeg 7.1 or 8.x libraries.
   if(EXISTS "${LIBDIR}/ffmpeg/lib/avfilter-10.dll")
     windows_install_shared_manifest(
       FILES
@@ -1639,28 +1640,6 @@ elseif(WIN32)
         ${LIBDIR}/ffmpeg/lib/avutil-59.dll
         ${LIBDIR}/ffmpeg/lib/swscale-8.dll
         ${LIBDIR}/ffmpeg/lib/swresample-5.dll
-      ALL
-    )
-  elseif(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-60.dll")
-    windows_install_shared_manifest(
-      FILES
-        ${LIBDIR}/ffmpeg/lib/avcodec-60.dll
-        ${LIBDIR}/ffmpeg/lib/avformat-60.dll
-        ${LIBDIR}/ffmpeg/lib/avdevice-60.dll
-        ${LIBDIR}/ffmpeg/lib/avutil-58.dll
-        ${LIBDIR}/ffmpeg/lib/swscale-7.dll
-        ${LIBDIR}/ffmpeg/lib/swresample-4.dll
-      ALL
-    )
-  else()
-    windows_install_shared_manifest(
-      FILES
-        ${LIBDIR}/ffmpeg/lib/avcodec-59.dll
-        ${LIBDIR}/ffmpeg/lib/avformat-59.dll
-        ${LIBDIR}/ffmpeg/lib/avdevice-59.dll
-        ${LIBDIR}/ffmpeg/lib/avutil-57.dll
-        ${LIBDIR}/ffmpeg/lib/swscale-6.dll
-        ${LIBDIR}/ffmpeg/lib/swresample-4.dll
       ALL
     )
   endif()

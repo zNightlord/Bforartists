@@ -22,6 +22,7 @@
 #include "BLI_math_vector_c.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_ordered_edge.hh"
+#include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
 
@@ -37,6 +38,8 @@
 
 #include "CLG_log.h"
 #include "IO_validate.hh"
+
+#include <algorithm>
 
 namespace blender {
 
@@ -431,7 +434,9 @@ BLI_INLINE void read_uvs_params(CDStreamConfig &config,
   }
 
   bke::MutableAttributeAccessor attributes = config.mesh->attributes_for_write();
-  config.uv_map = attributes.lookup_or_add_for_write_span<float2>(name, bke::AttrDomain::Corner);
+  /* ensure_for_write to force creation of the uv map, overwriting existing attributes of the same
+   * name. */
+  config.uv_map = attributes.ensure_for_write_span<float2>(name, bke::AttrDomain::Corner);
   config.mesh->uv_maps_active_set(name);
   config.mesh->uv_maps_default_set(name);
 }
@@ -725,6 +730,25 @@ static bool has_animated_geom_params(const ICompoundProperty arbGeomParams)
   return false;
 }
 
+/* Copy of #IPolyMeshSchema::getFaceSetNames(), to avoid ASAN false positive
+ * when the std::vector is passed from ASAN enabled Blender code to the
+ * Alembic library built without ASAN. */
+static Vector<std::string> get_face_set_names(const IPolyMeshSchema &schema)
+{
+  const IObject object = schema.getObject();
+
+  Vector<std::string> names;
+  for (size_t i = 0; i < object.getNumChildren(); i++) {
+    const Alembic::AbcCoreAbstract::ObjectHeader &header = object.getChildHeader(i);
+    if (IFaceSet::matches(header)) {
+      names.append(header.getName());
+    }
+  }
+
+  std::sort(names.begin(), names.end());
+  return names;
+}
+
 /* Specialization of #has_animations() as defined in abc_reader_object.h. */
 template<> bool has_animations(Alembic::AbcGeom::IPolyMeshSchema &schema, ImportSettings *settings)
 {
@@ -732,10 +756,7 @@ template<> bool has_animations(Alembic::AbcGeom::IPolyMeshSchema &schema, Import
     return true;
   }
 
-  std::vector<std::string> face_set_names;
-  schema.getFaceSetNames(face_set_names);
-
-  for (const std::string &face_set_name : face_set_names) {
+  for (const std::string &face_set_name : get_face_set_names(schema)) {
     const IFaceSet face_set = schema.getFaceSet(face_set_name);
     const IFaceSetSchema &face_set_schema = face_set.getSchema();
     if (!face_set_schema.isConstant()) {
@@ -920,7 +941,7 @@ Mesh *AbcMeshReader::read_mesh(Mesh *existing_mesh,
   if (num_faces > 0) {
     std::map<std::string, int> mat_map;
     bke::MutableAttributeAccessor attributes = new_mesh->attributes_for_write();
-    bke::SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_span<int>(
+    bke::SpanAttributeWriter<int> material_indices = attributes.ensure_for_write_span<int>(
         "material_index", bke::AttrDomain::Face);
     assign_facesets_to_material_indices(sample_sel, material_indices.span, mat_map);
     material_indices.finish();
@@ -937,10 +958,9 @@ void AbcMeshReader::assign_facesets_to_material_indices(const ISampleSelector &s
                                                         MutableSpan<int> material_indices,
                                                         std::map<std::string, int> &r_mat_map)
 {
-  std::vector<std::string> face_sets;
-  m_schema.getFaceSetNames(face_sets);
+  const Vector<std::string> face_sets = get_face_set_names(m_schema);
 
-  if (face_sets.empty()) {
+  if (face_sets.is_empty()) {
     return;
   }
 
@@ -985,7 +1005,7 @@ void AbcMeshReader::readFaceSetsSample(Main *bmain, Mesh *mesh, const ISampleSel
 {
   std::map<std::string, int> mat_map;
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
-  bke::SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_span<int>(
+  bke::SpanAttributeWriter<int> material_indices = attributes.ensure_for_write_span<int>(
       "material_index", bke::AttrDomain::Face);
   assign_facesets_to_material_indices(sample_sel, material_indices.span, mat_map);
   material_indices.finish();
@@ -1049,7 +1069,7 @@ static void read_vertex_creases(Mesh *mesh,
   }
 
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
-  bke::SpanAttributeWriter creases = attributes.lookup_or_add_for_write_only_span<float>(
+  bke::SpanAttributeWriter creases = attributes.ensure_for_write_only_span<float>(
       "crease_vert", bke::AttrDomain::Point);
   creases.span.fill(0.0f);
 
@@ -1089,7 +1109,7 @@ static void read_edge_creases(Mesh *mesh,
   }
 
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
-  bke::SpanAttributeWriter<float> creases = attributes.lookup_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> creases = attributes.ensure_for_write_span<float>(
       "crease_edge", bke::AttrDomain::Edge);
 
   const int64_t sharp_num = int64_t(sharpnesses->size());

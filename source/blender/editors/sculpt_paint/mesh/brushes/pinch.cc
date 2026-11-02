@@ -145,6 +145,8 @@ static void calc_grids(const Depsgraph &depsgraph,
   const Span<int> grids = node.grids();
   const MutableSpan positions = gather_grids_positions(subdiv_ccg, grids, tls.positions);
 
+  tls.factors.resize(positions.size());
+  tls.distances.resize(positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -195,6 +197,8 @@ static void calc_bmesh(const Depsgraph &depsgraph,
 
   const MutableSpan positions = gather_bmesh_positions(verts, tls.positions);
 
+  tls.factors.resize(positions.size());
+  tls.distances.resize(positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -240,10 +244,6 @@ void do_pinch_brush(const Depsgraph &depsgraph,
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
 
-  float3 area_no;
-  float3 area_co;
-  calc_brush_plane(depsgraph, brush, object, node_mask, area_no, area_co);
-
   /* delay the first daub because grab delta is not setup */
   if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
     return;
@@ -253,18 +253,20 @@ void do_pinch_brush(const Depsgraph &depsgraph,
     return;
   }
 
+  const float3 plane_normal = ss.cache->sculpt_normal_symm;
+
   /* Initialize `mat`. */
   float4x4 mat = float4x4::identity();
-  mat.x_axis() = math::cross(area_no, ss.cache->grab_delta_symm);
-  mat.y_axis() = math::cross(area_no, mat.x_axis());
-  mat.z_axis() = area_no;
+  mat.x_axis() = math::cross(plane_normal, ss.cache->grab_delta_symm);
+  mat.y_axis() = math::cross(plane_normal, mat.x_axis());
+  mat.z_axis() = plane_normal;
   mat.location() = ss.cache->location_symm;
   mat = math::normalize(mat);
 
   const std::array<float3, 2> stroke_xz{math::normalize(mat.x_axis()),
                                         math::normalize(mat.z_axis())};
 
-  const float4x4 local_mat = cube_tip_init(sd, object, brush);
+  const float4x4 local_mat = cube_tip_init(object, brush);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {

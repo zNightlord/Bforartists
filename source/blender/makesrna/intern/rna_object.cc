@@ -565,7 +565,7 @@ static void rna_Object_data_set(PointerRNA *ptr, PointerRNA value, ReportList *r
     }
   }
   else if (ob->type == OB_MESH) {
-    BKE_mesh_assign_object(G_MAIN, ob, reinterpret_cast<Mesh *>(id));
+    BKE_mesh_assign_object(ob->id.owner_bmain_for_write(), ob, reinterpret_cast<Mesh *>(id));
   }
   else {
     if (ob->data) {
@@ -577,13 +577,13 @@ static void rna_Object_data_set(PointerRNA *ptr, PointerRNA value, ReportList *r
     id_us_plus(id);
 
     ob->data = id;
-    BKE_object_materials_sync_length(G_MAIN, ob, id);
+    BKE_object_materials_sync_length(ob->id.owner_bmain_for_write(), ob, id);
 
     if (GS(id->name) == ID_CU_LEGACY) {
       BKE_curve_type_test(ob, true);
     }
     else if (ob->type == OB_ARMATURE) {
-      BKE_pose_rebuild(G_MAIN, ob, id_cast<bArmature *>(ob->data), true);
+      BKE_pose_rebuild(ob->id.owner_bmain_for_write(), ob, id_cast<bArmature *>(ob->data), true);
     }
   }
 }
@@ -1017,10 +1017,7 @@ void rna_object_vgroup_name_index_set(PointerRNA *ptr, const char *value, short 
   *index = BKE_object_defgroup_name_index(ob, value) + 1;
 }
 
-void rna_object_vgroup_name_set(PointerRNA *ptr,
-                                const char *value,
-                                char *result,
-                                int result_maxncpy)
+void rna_object_vgroup_name_set(PointerRNA *ptr, const char *value, MutableCStr result)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   if (!BKE_object_supports_vertex_groups(ob)) {
@@ -1031,17 +1028,14 @@ void rna_object_vgroup_name_set(PointerRNA *ptr,
   bDeformGroup *dg = BKE_object_defgroup_find_name(ob, value);
   if (dg) {
     /* No need for BLI_strncpy_utf8, since this matches an existing group. */
-    BLI_strncpy(result, value, result_maxncpy);
+    STRNCPY(result, value);
     return;
   }
 
   result[0] = '\0';
 }
 
-void rna_object_uvlayer_name_set(PointerRNA *ptr,
-                                 const char *value,
-                                 char *result,
-                                 int result_maxncpy)
+void rna_object_uvlayer_name_set(PointerRNA *ptr, const char *value, MutableCStr result)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   Mesh *mesh;
@@ -1050,7 +1044,7 @@ void rna_object_uvlayer_name_set(PointerRNA *ptr,
     mesh = id_cast<Mesh *>(ob->data);
 
     if (mesh->uv_map_names().contains(value)) {
-      BLI_strncpy(result, value, result_maxncpy);
+      STRNCPY(result, value);
       return;
     }
   }
@@ -1058,10 +1052,7 @@ void rna_object_uvlayer_name_set(PointerRNA *ptr,
   result[0] = '\0';
 }
 
-void rna_object_vcollayer_name_set(PointerRNA *ptr,
-                                   const char *value,
-                                   char *result,
-                                   int result_maxncpy)
+void rna_object_vcollayer_name_set(PointerRNA *ptr, const char *value, MutableCStr result)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   Mesh *mesh;
@@ -1075,7 +1066,7 @@ void rna_object_vcollayer_name_set(PointerRNA *ptr,
       layer = &mesh->fdata_legacy.layers[a];
 
       if (layer->type == CD_MCOL && STREQ(layer->name, value)) {
-        BLI_strncpy(result, value, result_maxncpy);
+        STRNCPY(result, value);
         return;
       }
     }
@@ -1131,17 +1122,20 @@ static void rna_Object_active_material_set(PointerRNA *ptr,
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
 
   DEG_id_tag_update(static_cast<ID *>(value.data), 0);
-  BLI_assert(BKE_id_is_in_global_main(&ob->id));
-  BLI_assert(BKE_id_is_in_global_main(static_cast<ID *>(value.data)));
-  BKE_object_material_assign(
-      G_MAIN, ob, static_cast<Material *>(value.data), ob->actcol, BKE_MAT_ASSIGN_EXISTING);
+  BKE_object_material_assign(ob->id.owner_bmain_for_write(),
+                             ob,
+                             static_cast<Material *>(value.data),
+                             ob->actcol,
+                             BKE_MAT_ASSIGN_EXISTING);
 }
 
 static int rna_Object_active_material_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
+  if (!ob->id.owner_bmain()) {
+    return false;
+  }
   bool is_editable;
-
   if ((ob->matbits == nullptr) || (ob->actcol == 0) || ob->matbits[ob->actcol - 1]) {
     is_editable = ID_IS_EDITABLE(ob);
   }
@@ -1343,6 +1337,9 @@ static int rna_MaterialSlot_material_editable(const PointerRNA *ptr, const char 
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   const int index = rna_MaterialSlot_index(ptr);
+  if (!ob->id.owner_bmain()) {
+    return false;
+  }
   bool is_editable;
 
   if ((ob->matbits == nullptr) || ob->matbits[index]) {
@@ -1377,10 +1374,11 @@ static void rna_MaterialSlot_material_set(PointerRNA *ptr,
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   int index = rna_MaterialSlot_index(ptr);
 
-  BLI_assert(BKE_id_is_in_global_main(&ob->id));
-  BLI_assert(BKE_id_is_in_global_main(static_cast<ID *>(value.data)));
-  BKE_object_material_assign(
-      G_MAIN, ob, static_cast<Material *>(value.data), index + 1, BKE_MAT_ASSIGN_EXISTING);
+  BKE_object_material_assign(ob->id.owner_bmain_for_write(),
+                             ob,
+                             static_cast<Material *>(value.data),
+                             index + 1,
+                             BKE_MAT_ASSIGN_EXISTING);
 }
 
 static bool rna_MaterialSlot_material_poll(PointerRNA *ptr, PointerRNA value)
@@ -2825,6 +2823,8 @@ static void rna_def_object_lineart(BlenderRNA *brna)
   RNA_def_struct_sdna(srna, "ObjectLineArt");
   RNA_def_struct_path_func(srna, "rna_ObjectLineArt_path");
 
+  RNA_define_lib_overridable(true);
+
   prop = RNA_def_property(srna, "usage", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, prop_feature_line_usage_items);
   RNA_def_property_ui_text(prop, "Usage", "How to use this object in Line Art calculation");
@@ -2857,6 +2857,8 @@ static void rna_def_object_lineart(BlenderRNA *brna)
                            "The intersection line will be included into the object with the "
                            "higher intersection priority value");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_object_lineart_update");
+
+  RNA_define_lib_overridable(false);
 }
 
 static void rna_def_object_visibility(StructRNA *srna)
@@ -3037,6 +3039,7 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "ID");
   RNA_def_property_pointer_funcs(
       prop, "rna_Object_data_get", "rna_Object_data_set", "rna_Object_data_typef", nullptr);
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
   RNA_def_property_ui_text(prop, "Data", "Object data");
   RNA_def_property_update(prop, 0, "rna_Object_data_update");

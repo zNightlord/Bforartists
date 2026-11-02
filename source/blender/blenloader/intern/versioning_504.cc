@@ -98,6 +98,31 @@ void blo_do_versions_504(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+
+  /* Default initialize proxy options.*/
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 504, 4)) {
+    for (Scene &scene : bmain->scenes) {
+      scene.r.compositor_proxy_preview_scale = 50;
+    }
+  }
+
+  /* Weight color on bones should be for deform bones only here. */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 504, 6)) {
+    if (!DNA_struct_member_exists(fd->filesdna, "Bone", "float", "weight_color")) {
+      for (bArmature *arm = static_cast<bArmature *>(bmain->armatures.first); arm != nullptr;
+           arm = static_cast<bArmature *>(arm->id.next))
+      {
+        for (EditBone &bone : *arm->edbo) {
+          if (bone && (bone->flag & BONE_NO_DEFORM)) {
+            continue;
+          }
+
+          ED_armature_ebone_weight_color_set(arm->edbo, &bone);
+        }
+      }
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.

@@ -565,8 +565,9 @@ option(WITH_INPUT_NDOF "Enable NDOF input devices (SpaceNavigator and friends)" 
 # is the only supported installation type, so there is no option.
 if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
   option(WITH_INSTALL_PORTABLE "\
-Install redistributable runtime (otherwise install into CMAKE_INSTALL_PREFIX, \
-or into PYTHON_SITE_PACKAGES for WITH_PYTHON_MODULE)"
+Install a redistributable runtime into CMAKE_INSTALL_PREFIX \
+(otherwise use a system directory layout, \
+or install into PYTHON_SITE_PACKAGES for WITH_PYTHON_MODULE)"
     ON
   )
 else()
@@ -1647,6 +1648,10 @@ if(WITH_COMPILER_ASAN AND NOT WITH_COMPILER_ASAN_EXTERN)
     "`WITH_COMPILER_ASAN_EXTERN` is disabled, which can cause mismatch usages of Eigen allocators."
   )
   add_definitions(-DEIGEN_MALLOC_ALREADY_ALIGNED=0)
+endif()
+
+if(WITH_COMPILER_CCACHE)
+  include(build_files/cmake/compiler_ccache_max_size_check.cmake)
 endif()
 
 # -----------------------------------------------------------------------------

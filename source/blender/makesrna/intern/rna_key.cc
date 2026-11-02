@@ -86,7 +86,7 @@ static void rna_ShapeKey_name_set(PointerRNA *ptr, const char *value)
   BLI_assert(ptr->owner_id);
   /* make sure the name is truly unique */
   Key *key = rna_ShapeKey_find_key(ptr->owner_id);
-  BKE_keyblock_rename(*G_MAIN, key, kb, value);
+  BKE_keyblock_rename(*key->id.owner_bmain_for_write(), key, kb, value);
 }
 
 static float rna_ShapeKey_frame_get(PointerRNA *ptr)
@@ -717,7 +717,7 @@ static std::optional<std::string> rna_ShapeKey_path(const PointerRNA *ptr)
   const ID *id = ptr->owner_id;
   char name_esc[sizeof(kb->name) * 2];
 
-  BLI_str_escape(name_esc, kb->name, sizeof(name_esc));
+  BLI_str_escape(name_esc, kb->name);
 
   if ((id) && (GS(id->name) != ID_KE)) {
     return fmt::format("shape_keys.key_blocks[\"{}\"]", name_esc);
@@ -824,7 +824,7 @@ static std::optional<std::string> rna_ShapeKeyPoint_path(const PointerRNA *ptr)
       index = rna_ShapeKey_curve_find_index(key, index);
     }
 
-    BLI_str_escape(name_esc_kb, kb->name, sizeof(name_esc_kb));
+    BLI_str_escape(name_esc_kb, kb->name);
 
     if (GS(id->name) == ID_KE) {
       return fmt::format("key_blocks[\"{}\"].data[{}]", name_esc_kb, index);
@@ -961,6 +961,7 @@ static void rna_def_keyblock(BlenderRNA *brna)
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(prop, "Name", "Name of Shape Key");
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ShapeKey_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_update(prop, 0, "rna_Key_update_data");
   RNA_def_struct_name_property(srna, prop);
 

@@ -14,6 +14,7 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string.hh"
@@ -397,17 +398,17 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     /* Update text styles to match. */
     for (uiStyle &style : userdef->uistyles) {
       style.paneltitle.points = 11.0f;
-      style.paneltitle.shadow = 3;
-      style.paneltitle.shadowalpha = 0.5f;
-      style.paneltitle.shadowcolor = 0.0f;
+      style.paneltitle.shadow_legacy = 3;
+      style.paneltitle.shadowalpha_legacy = 0.5f;
+      style.paneltitle.shadowcolor_legacy = 0.0f;
       style.widget.points = 11.0f;
-      style.widget.shadow = 1;
-      style.widget.shadowalpha = 0.5f;
-      style.widget.shadowcolor = 0.0f;
-      style.tooltip.shadow = 1;
+      style.widget.shadow_legacy = 1;
+      style.widget.shadowalpha_legacy = 0.5f;
+      style.widget.shadowcolor_legacy = 0.0f;
+      style.tooltip.shadow_legacy = 1;
       style.tooltip.points = 11.0f;
-      style.tooltip.shadowalpha = 0.5f;
-      style.tooltip.shadowcolor = 0.0f;
+      style.tooltip.shadowalpha_legacy = 0.5f;
+      style.tooltip.shadowcolor_legacy = 0.0f;
     }
 
     FROM_DEFAULT_V4_UCHAR(space_node.node_outline);
@@ -439,10 +440,6 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     btheme->space_view3d.grid_axis_brightness = U_theme_default.space_view3d.grid_axis_brightness;
   }
 
-  if (!USER_VERSION_ATLEAST(503, 5)) {
-    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
-  }
-
   if (!USER_VERSION_ATLEAST(503, 19)) {
     /* Alpha is now used, but was hardcoded to be opaque before. */
     btheme->common.anim.playhead[3] = 255;
@@ -454,6 +451,30 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
 
   if (!USER_VERSION_ATLEAST(503, 27)) {
     FROM_DEFAULT_V4_UCHAR(tui.wcol_state.error);
+  }
+
+  if (!USER_VERSION_ATLEAST(503, 31)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
+  }
+
+  if (!USER_VERSION_ATLEAST(504, 6)) {
+    /* Text styling moved from font style to the theme, copy widget style so it looks similar. */
+    FROM_DEFAULT_V4_UCHAR(tui.text_shadow_color);
+    copy_v2_v2_short(btheme->tui.text_shadow_offset, U_theme_default.tui.text_shadow_offset);
+    btheme->tui.text_shadow_type = U_theme_default.tui.text_shadow_type;
+
+    if (const uiStyle *style = userdef->uistyles.first()) {
+      const uiFontStyle &fstyle = style->widget;
+      const float shadow_color[4] = {fstyle.shadowcolor_legacy,
+                                     fstyle.shadowcolor_legacy,
+                                     fstyle.shadowcolor_legacy,
+                                     fstyle.shadowalpha_legacy};
+      rgba_float_to_uchar(btheme->tui.text_shadow_color, shadow_color);
+      btheme->tui.text_shadow_offset[0] = fstyle.shadx_legacy;
+      btheme->tui.text_shadow_offset[1] = fstyle.shady_legacy;
+      btheme->tui.text_shadow_type = ELEM(fstyle.shadow_legacy, 0, 5, 6) ? fstyle.shadow_legacy :
+                                                                           3;
+    }
   }
 
   /**
@@ -1339,11 +1360,9 @@ void blo_do_versions_userdef(UserDef *userdef)
     };
     const int replace_table_len = ARRAY_SIZE(replace_table);
 
-    BLI_string_replace_table_exact(
-        userdef->keyconfigstr, sizeof(userdef->keyconfigstr), replace_table, replace_table_len);
+    BLI_string_replace_table_exact(userdef->keyconfigstr, replace_table, replace_table_len);
     for (wmKeyConfigPref &kpt : userdef->user_keyconfig_prefs) {
-      BLI_string_replace_table_exact(
-          kpt.idname, sizeof(kpt.idname), replace_table, replace_table_len);
+      BLI_string_replace_table_exact(kpt.idname, replace_table, replace_table_len);
     }
   }
 
@@ -1571,10 +1590,10 @@ void blo_do_versions_userdef(UserDef *userdef)
     for (uiStyle &style : userdef->uistyles) {
       style.tooltip.points = 11.0f; /* UI_DEFAULT_TOOLTIP_POINTS */
       style.tooltip.character_weight = 400;
-      style.tooltip.shadow = 0;
-      style.tooltip.shady = -1;
-      style.tooltip.shadowalpha = 0.5f;
-      style.tooltip.shadowcolor = 0.0f;
+      style.tooltip.shadow_legacy = 0;
+      style.tooltip.shady_legacy = -1;
+      style.tooltip.shadowalpha_legacy = 0.5f;
+      style.tooltip.shadowcolor_legacy = 0.0f;
     }
   }
   if (!USER_VERSION_ATLEAST(403, 19)) {
@@ -1823,6 +1842,12 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (!USER_VERSION_ATLEAST(503, 21)) {
     if (userdef->sequencer_default_strip_length == 0.0f) {
       userdef->sequencer_default_strip_length = 1.0f;
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(504, 5)) {
+    if (const bTheme *btheme = userdef->themes.first()) {
+      userdef->noodle_curving = btheme->space_node.noodle_curving;
     }
   }
 

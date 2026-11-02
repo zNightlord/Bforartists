@@ -386,6 +386,9 @@ static void add_main_to_main(Main *mainvar, Main *from)
   MainListsArray fromarray = BKE_main_lists_get(*from);
   int a = fromarray.size();
   while (a--) {
+    for (ID &id : *fromarray[a]) {
+      BKE_libblock_owner_bmain_set(id, mainvar, false);
+    }
     BLI_movelisttolist(lbarray[a], fromarray[a]);
   }
 }
@@ -438,6 +441,7 @@ static void split_libdata(ListBaseT<ID> *lb_src,
         ListBaseT<ID> *lb_dst = which_libbase(mainvar, id->id_type());
         BLI_remlink(lb_src, id);
         BLI_addtail(lb_dst, id);
+        BKE_libblock_owner_bmain_set(*id, mainvar);
       }
       else {
         CLOG_ERROR(&LOG, "Invalid library for '%s'", id->name);
@@ -1078,7 +1082,9 @@ static void long_id_names_process_action_slots_identifiers(Main *bmain)
         bool has_truncated_slot_identifier = false;
         bAction *act = reinterpret_cast<bAction *>(id_iter);
         for (int i = 0; i < act->slot_array_num; i++) {
-          if (BLI_str_utf8_truncate_at_size(act->slot_array[i]->identifier, MAX_ID_NAME)) {
+          if (BLI_str_utf8_truncate_at_size(
+                  MutableCStr(act->slot_array[i]->identifier, MAX_ID_NAME)))
+          {
             CLOG_DEBUG(&LOG,
                        "Truncated too long action slot name to '%s'",
                        act->slot_array[i]->identifier);
@@ -1107,8 +1113,7 @@ static void long_id_names_process_action_slots_identifiers(Main *bmain)
               },
               "",
               '.',
-              act->slot_array[i]->identifier,
-              sizeof(act->slot_array[i]->identifier));
+              act->slot_array[i]->identifier);
         }
         break;
       }
@@ -1118,7 +1123,9 @@ static void long_id_names_process_action_slots_identifiers(Main *bmain)
             return true;
           }
           bActionConstraint *constraint_data = static_cast<bActionConstraint *>(constraint.data);
-          if (BLI_str_utf8_truncate_at_size(constraint_data->last_slot_identifier, MAX_ID_NAME)) {
+          if (BLI_str_utf8_truncate_at_size(
+                  MutableCStr(constraint_data->last_slot_identifier, MAX_ID_NAME)))
+          {
             CLOG_DEBUG(&LOG,
                        "Truncated too long bActionConstraint.last_slot_identifier to '%s'",
                        constraint_data->last_slot_identifier);
@@ -1142,19 +1149,25 @@ static void long_id_names_process_action_slots_identifiers(Main *bmain)
       default: {
         AnimData *anim_data = BKE_animdata_from_id(id_iter);
         if (anim_data) {
-          if (BLI_str_utf8_truncate_at_size(anim_data->last_slot_identifier, MAX_ID_NAME)) {
+          if (BLI_str_utf8_truncate_at_size(
+                  MutableCStr(anim_data->last_slot_identifier, MAX_ID_NAME)))
+          {
             CLOG_DEBUG(&LOG,
                        "Truncated too long AnimData.last_slot_identifier to '%s'",
                        anim_data->last_slot_identifier);
           }
-          if (BLI_str_utf8_truncate_at_size(anim_data->tmp_last_slot_identifier, MAX_ID_NAME)) {
+          if (BLI_str_utf8_truncate_at_size(
+                  MutableCStr(anim_data->tmp_last_slot_identifier, MAX_ID_NAME)))
+          {
             CLOG_DEBUG(&LOG,
                        "Truncated too long AnimData.tmp_last_slot_identifier to '%s'",
                        anim_data->tmp_last_slot_identifier);
           }
 
           bke::nla::foreach_strip_adt(*anim_data, [&](NlaStrip *strip) -> bool {
-            if (BLI_str_utf8_truncate_at_size(strip->last_slot_identifier, MAX_ID_NAME)) {
+            if (BLI_str_utf8_truncate_at_size(
+                    MutableCStr(strip->last_slot_identifier, MAX_ID_NAME)))
+            {
               CLOG_DEBUG(&LOG,
                          "Truncated too long NlaStrip.last_slot_identifier to '%s'",
                          strip->last_slot_identifier);
@@ -1222,15 +1235,14 @@ static bool is_minversion_older_than_blender(FileData *fd, ReportList *reports)
       char min_reader_ver_str[16];
       if (fd->fileversion == fg->minversion) {
         BKE_blender_version_blendfile_string_from_values(
-            writer_ver_str, sizeof(writer_ver_str), short(fd->fileversion), fg->subversion);
+            writer_ver_str, short(fd->fileversion), fg->subversion);
         BKE_blender_version_blendfile_string_from_values(
-            min_reader_ver_str, sizeof(min_reader_ver_str), fg->minversion, fg->minsubversion);
+            min_reader_ver_str, fg->minversion, fg->minsubversion);
       }
       else {
         BKE_blender_version_blendfile_string_from_values(
-            writer_ver_str, sizeof(writer_ver_str), short(fd->fileversion), -1);
-        BKE_blender_version_blendfile_string_from_values(
-            min_reader_ver_str, sizeof(min_reader_ver_str), fg->minversion, -1);
+            writer_ver_str, short(fd->fileversion), -1);
+        BKE_blender_version_blendfile_string_from_values(min_reader_ver_str, fg->minversion, -1);
       }
       BKE_reportf(reports,
                   RPT_ERROR,
@@ -2026,7 +2038,7 @@ static ID *read_id_struct(FileData *fd, BHead *bh, const char *blockname, const 
    * They can only be truncated here, ensuring that all ID names remain unique happens later, after
    * reading all local IDs, but before linking them, see the call to
    * #long_id_names_ensure_unique_id_names in #blo_read_file_internal. */
-  if (BLI_str_utf8_truncate_at_size(id->name + 2, MAX_ID_NAME - 2)) {
+  if (BLI_str_utf8_truncate_at_size(MutableCStr(id->name + 2, MAX_ID_NAME - 2))) {
     fd->flags |= FD_FLAGS_HAS_INVALID_ID_NAMES;
     CLOG_DEBUG(&LOG, "Truncated too long ID name to '%s'", id->name);
   }
@@ -2723,6 +2735,7 @@ static void direct_link_library(FileData *fd, Library *lib, Main *main)
       // change_link_placeholder_to_real_ID_pointer_fd(fd, lib, newmain->curlib);
 
       BLI_remlink(&main->libraries, lib);
+      BKE_libblock_owner_bmain_set(lib->id, nullptr);
       MEM_delete(lib);
 
       /* Now, since Blender always expect **last** Main pointer from fd->bmain->split_mains
@@ -2862,7 +2875,7 @@ static ID *create_placeholder(Main *mainvar,
   BKE_libblock_runtime_ensure(*ph_id);
 
   *(reinterpret_cast<short *>(ph_id->name)) = idcode;
-  BLI_strncpy(ph_id->name + 2, idname, sizeof(ph_id->name) - 2);
+  STRNCPY(MutableCStr(ph_id->name).drop_front(2), idname);
   BKE_libblock_init_empty(ph_id);
   ph_id->tag = tag | ID_TAG_MISSING;
   ph_id->us = ID_FAKE_USERS(ph_id);
@@ -2877,6 +2890,7 @@ static ID *create_placeholder(Main *mainvar,
   }
 
   BLI_addtail(lb, ph_id);
+  BKE_libblock_owner_bmain_set(*ph_id, mainvar);
   id_sort_by_name(lb, ph_id, nullptr);
 
   if (mainvar->id_map != nullptr) {
@@ -2914,8 +2928,14 @@ static bool direct_link_id(FileData *fd,
    * explicitly here, in case the `reader` is used by multiple IDs in the future. */
   reader.shared_data_by_stored_address.clear();
 
+  /* This flag used to be #LIB_DOIT (removed in 3fcf535d2e00). It is still set in some old files.
+   * Clearing it here only affects non-embedded IDs, so it's valid. Embedded IDs are only read
+   * below. */
+  id->flag &= ~ID_FLAG_EMBEDDED_DATA;
+
   /* Read part of datablock that is common between real and embedded datablocks. */
   direct_link_id_common(&reader, main->curlib, id, id_old, id_tag, id_read_tags);
+  BKE_libblock_owner_bmain_set(*id, main);
 
   if (BLO_readfile_id_runtime_tags(*id).is_link_placeholder) {
     /* For placeholder we only need to set the tag, no further data to read. */
@@ -3106,6 +3126,9 @@ static void read_undo_reuse_noundo_local_ids(FileData *fd)
 
     ListBaseT<ID> *new_lb = which_libbase(new_bmain, id_type->id_code);
     BLI_assert(new_lb->is_empty());
+    for (ID &id_iter : *lbarray[i]) {
+      BKE_libblock_owner_bmain_set(id_iter, new_bmain, false);
+    }
     BLI_movelisttolist(new_lb, lbarray[i]);
 
     /* Update mappings accordingly. */
@@ -3131,6 +3154,7 @@ static void read_undo_move_libmain_data(FileData *fd, Main *libmain, BHead *bhea
   BLI_remlink_safe(&old_main->libraries, curlib);
   new_main->split_mains->add_new(libmain);
   BLI_addtail(&new_main->libraries, curlib);
+  BKE_libblock_owner_bmain_set(curlib->id, new_main);
 
   /* Remove all references to the archive libraries owned by this 'regular' library. The
    * archive ones are only moved over into the new Main if some of their IDs are actually
@@ -3285,9 +3309,10 @@ static void read_undo_libraries_cleanup_unused_ids(FileData *fd)
       ListBaseT<ID> *new_lb = which_libbase(lib_bmain, idcode);
       ListBaseT<ID> *old_lb = which_libbase(old_bmain, idcode);
       BLI_remlink(new_lb, unused_id);
-      unused_id->lib = nullptr;
+      bke::id::id_lib_set(*unused_id, nullptr);
       BKE_main_idmap_remove_id(fd->new_idmap_uid, unused_id);
       BLI_addtail(old_lb, unused_id);
+      BKE_libblock_owner_bmain_set(*unused_id, old_bmain);
       /* NOTE: There should be no need to update ID pointers mapping (`fd->libmap`) here, as
        * these IDs should not be in there in the first place. */
     }
@@ -3364,7 +3389,7 @@ static void read_libblock_undo_restore_identical(
   /* Some tags need to be preserved here. */
   id_old->tag = ((id_tag | ID_TAG_UNDO_OLD_ID_REUSED_UNCHANGED) & ~ID_TAG_KEEP_ON_UNDO) |
                 (id_old->tag & ID_TAG_KEEP_ON_UNDO);
-  id_old->lib = main->curlib;
+  bke::id::id_lib_set(*id_old, main->curlib);
   id_old->us = ID_FAKE_USERS(id_old);
   /* Do not reset id->icon_id here, memory allocated for it remains valid. */
   /* Needed because .blend may have been saved with crap value here... */
@@ -3377,6 +3402,7 @@ static void read_libblock_undo_restore_identical(
   ListBaseT<ID> *new_lb = which_libbase(main, idcode);
   BLI_remlink(old_lb, id_old);
   BLI_addtail(new_lb, id_old);
+  BKE_libblock_owner_bmain_set(*id_old, main);
 
   /* Recalc flags, mostly these just remain as they are. */
   id_old->recalc |= direct_link_id_restore_recalc_exceptions(id_old);
@@ -3465,6 +3491,8 @@ static void read_libblock_undo_restore_at_old_address(FileData *fd, Main *main, 
 
   BLI_addtail(new_lb, id_old);
   BLI_addtail(old_lb, id);
+  BKE_libblock_owner_bmain_set(*id_old, main);
+  BKE_libblock_owner_bmain_set(*id, old_bmain);
 
   /* In case a library has been re-read, it has added already its own split main to the new Main
    * (see #direct_link_library code).
@@ -5003,7 +5031,7 @@ static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const 
 {
   char idname_full[MAX_ID_NAME];
   *(reinterpret_cast<short *>(idname_full)) = idcode;
-  BLI_strncpy(idname_full + 2, name, sizeof(idname_full) - 2);
+  STRNCPY(MutableCStr(idname_full).drop_front(2), name);
 
   return fd->bhead_idname_map->lookup_default(idname_full, nullptr);
 }
@@ -5805,6 +5833,7 @@ static void split_main_newid(Main *mainptr, Main *main_newid)
       if (id.tag & ID_TAG_NEW) {
         BLI_remlink(lbarray[i], &id);
         BLI_addtail(lbarray_newid[i], &id);
+        BKE_libblock_owner_bmain_set(id, main_newid);
       }
     }
   }
@@ -6060,6 +6089,7 @@ static void read_library_linked_ids(FileData *basefd, FileData *fd, Main *mainva
           !(id->flag & ID_FLAG_INDIRECT_WEAK_LINK))
       {
         BLI_remlink(lbarray[a], id);
+        BKE_libblock_owner_bmain_set(*id, nullptr);
         if (mainvar->id_map != nullptr) {
           BKE_main_idmap_remove_id(mainvar->id_map, id);
         }

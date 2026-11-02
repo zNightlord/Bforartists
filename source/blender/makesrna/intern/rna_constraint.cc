@@ -442,12 +442,14 @@ static void rna_Constraint_name_set(PointerRNA *ptr, const char *value)
   }
 
   /* fix all the animation data which may link to this */
-  BKE_animdata_fix_paths(*ptr->owner_id,
-                         "constraints",
-                         RNA_path_name_to_infix(oldname),
-                         RNA_path_name_to_infix(con->name),
-                         /*verify_paths=*/true,
-                         *G_MAIN);
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_animdata_fix_paths(*ptr->owner_id,
+                           "constraints",
+                           RNA_path_name_to_infix(oldname),
+                           RNA_path_name_to_infix(con->name),
+                           /*verify_paths=*/true,
+                           *bmain);
+  }
 }
 
 static std::optional<std::string> rna_Constraint_do_compute_path(Object *ob, bConstraint *con)
@@ -465,12 +467,12 @@ static std::optional<std::string> rna_Constraint_do_compute_path(Object *ob, bCo
   if (pchan) {
     char name_esc_pchan[sizeof(pchan->name) * 2];
     char name_esc_const[sizeof(con->name) * 2];
-    BLI_str_escape(name_esc_pchan, pchan->name, sizeof(name_esc_pchan));
-    BLI_str_escape(name_esc_const, con->name, sizeof(name_esc_const));
+    BLI_str_escape(name_esc_pchan, pchan->name);
+    BLI_str_escape(name_esc_const, con->name);
     return fmt::format("pose.bones[\"{}\"].constraints[\"{}\"]", name_esc_pchan, name_esc_const);
   }
   char name_esc_const[sizeof(con->name) * 2];
-  BLI_str_escape(name_esc_const, con->name, sizeof(name_esc_const));
+  BLI_str_escape(name_esc_const, con->name);
   return fmt::format("constraints[\"{}\"]", name_esc_const);
 }
 

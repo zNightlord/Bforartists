@@ -137,9 +137,9 @@ static void extract_weights_mesh(const MeshRenderData &mr,
   });
 }
 
-static void extract_weights_bm(const MeshRenderData &mr,
-                               const DRW_MeshWeightState &weight_state,
-                               MutableSpan<float> vbo_data)
+static void extract_weights_bmesh(const MeshRenderData &mr,
+                                  const DRW_MeshWeightState &weight_state,
+                                  MutableSpan<float> vbo_data)
 {
   const BMesh &bm = *mr.bm;
   const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
@@ -177,7 +177,7 @@ gpu::VertBufPtr extract_weights(const MeshRenderData &mr,
       extract_weights_mesh(mr, weight_state, vbo_data);
     }
     else {
-      extract_weights_bm(mr, weight_state, vbo_data);
+      extract_weights_bmesh(mr, weight_state, vbo_data);
     }
   }
 
@@ -218,13 +218,12 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   const DRW_MeshWeightState &weight_state = batch_cache.weight_state;
   const int active_index = weight_state.defgroup_active;
   const eV3D_Overlay_WPaint_VGroupColorMode mode = weight_state.vgroup_color_mode;
-
   const Span<float3> defgroup_colors(weight_state.defgroup_colors, weight_state.defgroup_len);
   const Span<bool> validmap(weight_state.defgroup_validmap,
                             weight_state.defgroup_validmap ? weight_state.defgroup_len : 0);
 
   /* Handles nothing, Mesh or BMesh API cases.*/
-  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
+  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP) {
     vert_data.fill(float3(0.0f));
   }
   else if (mr.extract_type == MeshExtractType::Mesh) {

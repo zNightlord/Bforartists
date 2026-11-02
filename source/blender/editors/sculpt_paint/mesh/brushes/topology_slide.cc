@@ -245,6 +245,8 @@ static void calc_grids(const Depsgraph &depsgraph,
   const Span<int> grids = node.grids();
   const MutableSpan positions = gather_grids_positions(subdiv_ccg, grids, tls.positions);
 
+  tls.factors.resize(orig_data.positions.size());
+  tls.distances.resize(orig_data.positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(orig_data.positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -300,6 +302,8 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   Array<float3> orig_normals(verts.size());
   orig_position_data_gather_bmesh(*ss.bm_log, verts, orig_positions, orig_normals);
 
+  tls.factors.resize(orig_positions.size());
+  tls.distances.resize(orig_positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(orig_positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -348,7 +352,7 @@ void do_topology_slide_brush(const Depsgraph &depsgraph,
   }
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
-  const float4x4 mat = cube_tip_init(sd, object, brush);
+  const float4x4 mat = cube_tip_init(object, brush);
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       Mesh &mesh = *id_cast<Mesh *>(object.data);

@@ -33,6 +33,7 @@
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_enumerable_thread_specific.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_task.hh"
 
@@ -434,12 +435,8 @@ void do_plane_brush(const Depsgraph &depsgraph,
 
   float4x4 mat;
   float4x4 mat_inv;
-  const float tip_rotation = bke::brush::tip_rotation_get(sd.paint, brush);
-  calc_brush_local_mat(0,
-                       tip_rotation,
-                       *ss.cache->vc,
-                       object,
-                       normal,
+  calc_brush_local_mat(normal,
+                       ss.cache->tip_motion_normal_symm,
                        center,
                        ss.cache->radius,
                        mat.ptr(),
@@ -527,7 +524,6 @@ void do_plane_brush(const Depsgraph &depsgraph,
 
 namespace plane {
 CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
-                                  const Paint &paint,
                                   Object &ob,
                                   const Brush &brush,
                                   IndexMaskMemory &memory)
@@ -558,15 +554,11 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
   const float3 tip_normal = brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE ?
                                 ss.cache->view_normal_symm :
                                 plane_normal;
-  const float tip_rotation = bke::brush::tip_rotation_get(paint, brush);
 
   float4x4 brush_local_mat;
   float4x4 brush_local_mat_inv;
-  calc_brush_local_mat(0,
-                       tip_rotation,
-                       *ss.cache->vc,
-                       ob,
-                       tip_normal,
+  calc_brush_local_mat(tip_normal,
+                       ss.cache->tip_motion_normal_symm,
                        plane_center,
                        ss.cache->radius,
                        brush_local_mat.ptr(),
@@ -580,18 +572,38 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
    * location. However, for the Plane brush, its effective center often deviates from the cursor
    * location. Calculating the affected nodes using the cursor location as the center can lead to
    * issues (see, for example, #123768). */
-  const IndexMask plane_mask = bke::pbvh::search_nodes(
-      pbvh, memory, [&](const bke::pbvh::Node &node) {
+  const bool has_cube_tip = BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt);
+  IndexMask plane_mask;
+  switch (brush.falloff_shape) {
+    case PAINT_FALLOFF_SHAPE_SPHERE: {
+      plane_mask = bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
         if (node_fully_masked_or_hidden(node)) {
           return false;
         }
-        const Bounds<float3> &bounds = use_original ? node.bounds_orig() : node.bounds();
-        if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
-          return node_in_box(
-              brush_local_mat, bounds, float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
+        if (has_cube_tip) {
+          return node_in_box(brush_local_mat, node.bounds());
         }
-        return node_in_box(brush_local_mat, node.bounds());
+        return node_in_sphere(node, plane_center, ss.cache->radius, false);
       });
+      break;
+    }
+
+    case PAINT_FALLOFF_SHAPE_TUBE: {
+      const DistRayAABB_Precalc ray_dist_precalc = dist_squared_ray_to_aabb_v3_precalc(
+          plane_center, ss.cache->view_normal_symm);
+      plane_mask = bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
+        if (node_fully_masked_or_hidden(node)) {
+          return false;
+        }
+        if (has_cube_tip) {
+          return node_in_box(
+              brush_local_mat, node.bounds(), float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
+        }
+        return node_in_cylinder(ray_dist_precalc, node, ss.cache->radius, false);
+      });
+      break;
+    }
+  }
 
   return {plane_mask, plane_center, plane_normal};
 }

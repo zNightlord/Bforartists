@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#include "BLI_span.hh"
+
 namespace blender {
 
 /** \file
@@ -14,6 +16,7 @@ namespace blender {
 
 int BLI_cpu_support_sse2();
 int BLI_cpu_support_sse42();
+int BLI_cpu_support_avx2();
 /**
  * Write a backtrace into a file for systems which support it.
  */
@@ -31,9 +34,8 @@ char *BLI_cpu_brand_string();
  * purposes, and not for reachability over a network.
  *
  * \param buffer: Character buffer to write the hostname into.
- * \param buffer_maxncpy: Size of the character buffer, including trailing '\0'.
  */
-void BLI_hostname_get(char *buffer, size_t buffer_maxncpy);
+void BLI_hostname_get(MutableCStr buffer);
 
 /** Get maximum addressable memory in megabytes. */
 size_t BLI_system_memory_max_in_megabytes();

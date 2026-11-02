@@ -110,6 +110,8 @@ static void calc_grids(const Depsgraph &depsgraph,
   const Span<int> grids = node.grids();
   const int grid_verts_num = grids.size() * key.grid_area;
 
+  tls.factors.resize(orig_data.positions.size());
+  tls.distances.resize(orig_data.positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(orig_data.positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -160,6 +162,8 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   Array<float3> orig_normals(verts.size());
   orig_position_data_gather_bmesh(*ss.bm_log, verts, orig_positions, orig_normals);
 
+  tls.factors.resize(orig_positions.size());
+  tls.distances.resize(orig_positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(orig_positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -202,7 +206,7 @@ void do_thumb_brush(const Depsgraph &depsgraph,
   const float3 &grab_delta = ss.cache->grab_delta_symm;
   const float3 &normal = ss.cache->sculpt_normal_symm;
   const float3 offset = math::cross(math::cross(normal, grab_delta), normal) * ss.cache->bstrength;
-  const float4x4 mat = cube_tip_init(sd, object, brush);
+  const float4x4 mat = cube_tip_init(object, brush);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {

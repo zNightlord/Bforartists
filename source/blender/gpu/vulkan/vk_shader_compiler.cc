@@ -10,6 +10,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
+#include "BLI_simd.hh"
 #ifdef _WIN32
 #  include "BLI_winstuff.hh"
 #endif
@@ -42,7 +43,7 @@ static std::optional<std::string> cache_dir_get()
   static std::optional<std::string> result = []() -> std::optional<std::string> {
     static char tmp_dir_buffer[FILE_MAX];
     /* Shader builder doesn't return the correct appdir. */
-    BKE_appdir_folder_caches(tmp_dir_buffer, sizeof(tmp_dir_buffer));
+    BKE_appdir_folder_caches(tmp_dir_buffer);
 
     std::string cache_dir = std::string(tmp_dir_buffer) + "vk-spirv-cache" + SEP_STR;
     BLI_dir_create_recursive(cache_dir.c_str());
@@ -144,7 +145,7 @@ static void write_spirv_to_disk(VKShaderModule &shader_module)
   spirv_file.write(reinterpret_cast<const char *>(shader_module.spirv_binary.data()), size);
 
   /* Write the sidecar */
-  SPIRVSidecar sidecar;
+  SPIRVSidecar sidecar = {};
   sidecar.spirv_size = size;
   sidecar.spirv_version = spirv_target_version_get();
   std::string sidecar_path = (*cache_dir_get()) + SEP_STR + shader_module.sources_hash +
@@ -403,8 +404,15 @@ static bool compile_ex(shaderc::Compiler &compiler,
   /* Removes line directive. */
   std::string sources = patch_line_directives(shader_module.combined_sources);
 
-  shader_module.compilation_result = compiler.CompileGlslToSpv(
-      sources, stage, full_name.c_str(), options);
+  /* The task scheduler enables flush-to-zero. Some platforms convert floating point literals using
+   * floating point instructions, which would then turn denormal literals into zero. That happens
+   * for example with the `1.17549435e-38` guard inside OCIO generated for the Filmic view
+   * transform. */
+  {
+    ScopedNoFlushToZero scoped_no_flush_to_zero;
+    shader_module.compilation_result = compiler.CompileGlslToSpv(
+        sources, stage, full_name.c_str(), options);
+  }
   bool compilation_succeeded = shader_module.compilation_result.GetCompilationStatus() ==
                                shaderc_compilation_status_success;
   if (compilation_succeeded) {

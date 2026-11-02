@@ -30,6 +30,10 @@ struct SpaceLink;
 struct bGPdata;
 struct wmTimer;
 
+namespace bke {
+class RegionView3DRuntime;
+}  // namespace bke
+
 /** #View3DOverlay.handle_display */
 enum eHandleDisplay : int {
   /* Display only selected points. */
@@ -88,9 +92,6 @@ enum eRegionView3D_Persp : char {
 /** #RegionView3D::rflag */
 enum eRegionView3D_Flag : short {
   RV3D_CLIPPING = 1 << 2,
-  RV3D_NAVIGATING = 1 << 3,
-  RV3D_GPULIGHT_UPDATE = 1 << 4,
-  RV3D_PAINTING = 1 << 5,
   /**
    * Disable Z-buffer offset, skip calls to #ED_view3d_polygon_offset.
    * Use when precise surface depth is needed and picking bias isn't, see #45434.
@@ -122,9 +123,6 @@ enum eRegionView3D_ViewLock : char {
   RV3D_LOCK_ANY_TRANSFORM = (RV3D_LOCK_LOCATION | RV3D_LOCK_ROTATION | RV3D_LOCK_ZOOM_AND_DOLLY),
 };
 ENUM_OPERATORS(eRegionView3D_ViewLock)
-
-/** Bit-wise OR of the regular lock-flags with runtime only lock-flags. */
-#define RV3D_LOCK_FLAGS(rv3d) ((rv3d)->viewlock | ((rv3d)->runtime_viewlock))
 
 /** #RegionView3D::viewlock_quad */
 enum eRegionView3D_ViewLockQuad : char {
@@ -361,7 +359,7 @@ ENUM_OPERATORS(eView3DOverlay_WPaintFlag)
 
 /** #View3DOverlay.wpaint_vgroup_color_mode */
 enum eV3D_Overlay_WPaint_VGroupColorMode : int {
-  V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF = 0,
+  V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP = 0,
   V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE = 1,
   V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL = 2,
 };
@@ -480,35 +478,13 @@ struct RegionView3D {
   float persmat[4][4] = {};
   /** Inverse of persmat. */
   float persinv[4][4] = {};
-  /** Offset/scale for camera GLSL texture-coordinates. */
-  float viewcamtexcofac[4] = {};
-
-  /** viewmat/persmat multiplied with object matrix, while drawing and selection. */
-  float viewmatob[4][4] = {};
-  float persmatob[4][4] = {};
 
   /** User defined clipping planes. */
   float clip[6][4] = {};
-  /**
-   * Clip in object space,
-   * means we can test for clipping in edit-mode without first going into world-space.
-   */
-  float clip_local[6][4] = {};
   struct BoundBox *clipbb = nullptr;
 
   /** Allocated backup of itself while in local-view. */
   struct RegionView3D *localvd = nullptr;
-  struct ViewRender *view_render = nullptr;
-
-  /** Animated smooth view. */
-  struct SmoothView3DStore *sms = nullptr;
-  struct wmTimer *smooth_timer = nullptr;
-
-  /** Transform gizmo matrix. */
-  float twmat[4][4] = {};
-  /** min/max dot product on `twmat` XYZ axis. */
-  float tw_axis_min[3] = {}, tw_axis_max[3] = {};
-  float tw_axis_matrix[3][3] = {};
 
   DNA_DEPRECATED float gridview = 0;
 
@@ -544,19 +520,15 @@ struct RegionView3D {
   eRegionView3D_Persp persp = RV3D_ORTHO;
   eRegionView3D_View view = RV3D_VIEW_USER;
   eRegionView3D_ViewAxisRoll view_axis_roll = RV3D_VIEW_AXIS_ROLL_0;
-  eRegionView3D_ViewLock viewlock = {}; /* Should usually be accessed with RV3D_LOCK_FLAGS()! */
-  /** Options for runtime only locking (cleared on file read) */
-  eRegionView3D_ViewLock runtime_viewlock =
-      {}; /* Should usually be accessed with RV3D_LOCK_FLAGS()! */
+  /* Should usually be accessed with bke::region_view3d_lock_flags_get()! */
+  eRegionView3D_ViewLock viewlock = {};
   /** Options for quadview (store while out of quad view). */
   eRegionView3D_ViewLockQuad viewlock_quad = {};
-  char _pad[1] = {};
+
+  eRegionView3D_Flag rflag = {};
+
   /** Normalized offset for locked view: (-1, -1) bottom left, (1, 1) upper right. */
   float ofs_lock[2] = {};
-
-  /** XXX can easily get rid of this (Julian). */
-  short twdrawflag = 0;
-  eRegionView3D_Flag rflag = {};
 
   /** Last view (use when switching out of camera view). */
   float lviewquat[4] = {};
@@ -564,7 +536,6 @@ struct RegionView3D {
   eRegionView3D_Persp lpersp = RV3D_ORTHO;
   eRegionView3D_View lview = RV3D_VIEW_USER;
   eRegionView3D_ViewAxisRoll lview_axis_roll = RV3D_VIEW_AXIS_ROLL_0;
-  char _pad8[4] = {};
 
   eRegionView3D_NDOFFlag ndof_flag = {};
   /**
@@ -574,9 +545,9 @@ struct RegionView3D {
    */
   float ndof_ofs[3] = {};
 
-  /** Active rotation from NDOF (run-time only). */
-  float ndof_rot_angle = 0;
-  float ndof_rot_axis[3] = {};
+  char _pad[4] = {};
+
+  bke::RegionView3DRuntime *runtime = nullptr;
 };
 
 struct View3DCursor {
@@ -672,7 +643,7 @@ struct View3DOverlay {
   eView3DOverlay_WPaintFlag wpaint_flag = {};
   /* Weight paint color mode settings. */
   eV3D_Overlay_WPaint_VGroupColorMode wpaint_vgroup_color_mode =
-      V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF;
+      V3D_OVERLAY_WPAINT_VGROUP_COLOR_RAMP;
 
   /** Alpha for texture, weight, vertex paint overlay. */
   float texture_paint_mode_opacity = 1.0f;
