@@ -934,7 +934,7 @@ static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
                            RNA_path_name_to_infix(oldname),
                            RNA_path_name_to_infix(md->name),
                            /*verify_paths=*/true,
-                           *G_MAIN);
+                           *ob->id.owner_bmain_for_write());
   }
 }
 
@@ -948,7 +948,7 @@ static std::optional<std::string> rna_Modifier_path(const PointerRNA *ptr)
   const ModifierData *md = static_cast<const ModifierData *>(ptr->data);
   char name_esc[sizeof(md->name) * 2];
 
-  BLI_str_escape(name_esc, md->name, sizeof(name_esc));
+  BLI_str_escape(name_esc, md->name);
   return fmt::format("modifiers[\"{}\"]", name_esc);
 }
 
@@ -1018,7 +1018,7 @@ static void rna_Modifier_use_pin_to_last_set(PointerRNA *ptr, bool value)
     static void rna_##_type##Modifier_##_prop##_set(PointerRNA *ptr, const char *value) \
     { \
       _type##ModifierData *tmd = (_type##ModifierData *)ptr->data; \
-      rna_object_vgroup_name_set(ptr, value, tmd->_prop, sizeof(tmd->_prop)); \
+      rna_object_vgroup_name_set(ptr, value, tmd->_prop); \
     }
 
 RNA_MOD_VGROUP_NAME_SET(Armature, defgrp_name);
@@ -1088,7 +1088,7 @@ static void rna_ExplodeModifier_vgroup_set(PointerRNA *ptr, const char *value)
     static void rna_##_type##Modifier_##_prop##_set(PointerRNA *ptr, const char *value) \
     { \
       _type##ModifierData *tmd = (_type##ModifierData *)ptr->data; \
-      rna_object_uvlayer_name_set(ptr, value, tmd->_prop, sizeof(tmd->_prop)); \
+      rna_object_uvlayer_name_set(ptr, value, tmd->_prop); \
     }
 
 RNA_MOD_UVLAYER_NAME_SET(MappingInfo, uvlayer_name);
@@ -2391,10 +2391,7 @@ static void rna_GreasePencilModifier_material_set(PointerRNA *ptr,
     static void rna_##_type##Modifier_vertex_group_name_set(PointerRNA *ptr, const char *value) \
     { \
       _type##ModifierData *tmd = static_cast<_type##ModifierData *>(ptr->data); \
-      rna_object_vgroup_name_set(ptr, \
-                                 value, \
-                                 tmd->influence.vertex_group_name, \
-                                 sizeof(tmd->influence.vertex_group_name)); \
+      rna_object_vgroup_name_set(ptr, value, tmd->influence.vertex_group_name); \
     }
 
 RNA_MOD_GREASE_PENCIL_MATERIAL_FILTER_SET(GreasePencilColor);
@@ -2491,10 +2488,10 @@ static std::optional<std::string> rna_GreasePencilDashModifierSegment_path(const
   BLI_assert(dmd != nullptr);
 
   char name_esc[sizeof(dmd->modifier.name) * 2];
-  BLI_str_escape(name_esc, dmd->modifier.name, sizeof(name_esc));
+  BLI_str_escape(name_esc, dmd->modifier.name);
 
   char ds_name_esc[sizeof(dash_segment->name) * 2];
-  BLI_str_escape(ds_name_esc, dash_segment->name, sizeof(ds_name_esc));
+  BLI_str_escape(ds_name_esc, dash_segment->name);
 
   return fmt::format("modifiers[\"{}\"].segments[\"{}\"]", name_esc, ds_name_esc);
 }
@@ -2523,7 +2520,7 @@ static void rna_GreasePencilDashModifierSegment_name_set(PointerRNA *ptr, const 
 
   /* Fix all the animation data which may link to this. */
   char name_esc[sizeof(dmd->modifier.name) * 2];
-  BLI_str_escape(name_esc, dmd->modifier.name, sizeof(name_esc));
+  BLI_str_escape(name_esc, dmd->modifier.name);
   char rna_path_prefix[36 + sizeof(name_esc) + 1];
   SNPRINTF_UTF8(rna_path_prefix, "modifiers[\"%s\"].segments", name_esc);
   BKE_animdata_fix_paths(*ptr->owner_id,
@@ -2531,7 +2528,7 @@ static void rna_GreasePencilDashModifierSegment_name_set(PointerRNA *ptr, const 
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(dash_segment->name),
                          /*verify_paths=*/true,
-                         *G_MAIN);
+                         *ptr->owner_id->owner_bmain_for_write());
 }
 
 static void rna_GreasePencilDashModifier_segments_begin(CollectionPropertyIterator *iter,
@@ -2600,10 +2597,10 @@ static std::optional<std::string> rna_GreasePencilTimeModifierSegment_path(const
   BLI_assert(tmd != nullptr);
 
   char name_esc[sizeof(tmd->modifier.name) * 2];
-  BLI_str_escape(name_esc, tmd->modifier.name, sizeof(name_esc));
+  BLI_str_escape(name_esc, tmd->modifier.name);
 
   char ds_name_esc[sizeof(segment->name) * 2];
-  BLI_str_escape(ds_name_esc, segment->name, sizeof(ds_name_esc));
+  BLI_str_escape(ds_name_esc, segment->name);
 
   return fmt::format("modifiers[\"{}\"].segments[\"{}\"]", name_esc, ds_name_esc);
 }
@@ -2632,7 +2629,7 @@ static void rna_GreasePencilTimeModifierSegment_name_set(PointerRNA *ptr, const 
 
   /* Fix all the animation data which may link to this. */
   char name_esc[sizeof(tmd->modifier.name) * 2];
-  BLI_str_escape(name_esc, tmd->modifier.name, sizeof(name_esc));
+  BLI_str_escape(name_esc, tmd->modifier.name);
   char rna_path_prefix[36 + sizeof(name_esc) + 1];
   SNPRINTF_UTF8(rna_path_prefix, "modifiers[\"%s\"].segments", name_esc);
   BKE_animdata_fix_paths(*ptr->owner_id,
@@ -2640,7 +2637,7 @@ static void rna_GreasePencilTimeModifierSegment_name_set(PointerRNA *ptr, const 
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(segment->name),
                          /*verify_paths=*/true,
-                         *G_MAIN);
+                         *ptr->owner_id->owner_bmain_for_write());
 }
 
 static void rna_GreasePencilTimeModifier_segments_begin(CollectionPropertyIterator *iter,
@@ -10212,6 +10209,7 @@ static void rna_def_modifier_grease_pencil_dash_segment(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Name", "Name of the dash segment");
   RNA_def_property_string_funcs(
       prop, nullptr, nullptr, "rna_GreasePencilDashModifierSegment_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_struct_name_property(srna, prop);
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER | NA_RENAME, nullptr);
 
@@ -10774,6 +10772,7 @@ static void rna_def_modifier_grease_pencil_time_segment(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Name", "Name of the dash segment");
   RNA_def_property_string_funcs(
       prop, nullptr, nullptr, "rna_GreasePencilTimeModifierSegment_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_struct_name_property(srna, prop);
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER | NA_RENAME, nullptr);
 
@@ -11543,6 +11542,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   /* strings */
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_Modifier_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Name", "Modifier name");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER | NA_RENAME, "rna_Modifier_name_update");
   RNA_def_struct_name_property(srna, prop);

@@ -589,7 +589,7 @@ void popup_menu_reports(bContext *C, ReportList *reports)
       msg_next = strchr(msg, '\n');
       if (msg_next) {
         msg_next++;
-        BLI_strncpy_utf8(buf, msg, std::min(sizeof(buf), size_t(msg_next - msg)));
+        STRNCPY_UTF8(MutableCStr(buf).take_front(msg_next - msg), msg);
         msg = buf;
       }
       layout->label(msg, icon);
@@ -904,6 +904,23 @@ bool popup_block_name_exists(const bScreen *screen, const StringRef name)
         return true;
       }
     }
+  }
+  return false;
+}
+
+bool popup_region_from_operator(const bScreen *screen, const ARegion *region)
+{
+  /* Walk up parent popups, e.g. a popover opened from an operator dialog. Parents may
+   * already be closed, as with a context menu opened from a popover. */
+  while (region && BLI_findindex(&screen->regionbase, region) != -1) {
+    const Block *block = region->runtime->uiblocks.first();
+    if (!(block && block->handle)) {
+      return false;
+    }
+    if (block->handle->popup_op) {
+      return true;
+    }
+    region = block->handle->ctx_region_popup;
   }
   return false;
 }

@@ -183,7 +183,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
 
     if (params->recursion_level > 0) {
       char root[FILE_MAX];
-      BLI_path_split_dir_part(full_path, root, FILE_MAX);
+      BLI_path_split_dir_part(full_path, root);
       tooltip_text_field_add(tip, root, {}, ui::TIP_STYLE_NORMAL, ui::TIP_LC_NORMAL);
     }
 
@@ -219,8 +219,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
       }
       if (thumb) {
         /* Look for version in existing thumbnail if available. */
-        IMB_metadata_get_field(
-            thumb->metadata(), "Thumb::Blender::Version", version_str, sizeof(version_str));
+        IMB_metadata_get_field(thumb->metadata(), "Thumb::Blender::Version", version_str);
       }
 
       if (!version_str[0] && !(file->attributes & FILE_ATTR_OFFLINE)) {
@@ -248,10 +247,8 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
       if (thumb) {
         char value1[128];
         char value2[128];
-        if (IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Image::Width", value1, sizeof(value1)) &&
-            IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Image::Height", value2, sizeof(value2)))
+        if (IMB_metadata_get_field(thumb->metadata(), "Thumb::Image::Width", value1) &&
+            IMB_metadata_get_field(thumb->metadata(), "Thumb::Image::Height", value2))
         {
           tooltip_text_field_add(tip,
                                  fmt::format("{} \u00D7 {}", value1, value2),
@@ -271,10 +268,8 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
         char value1[128];
         char value2[128];
         char value3[128];
-        if (IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Video::Width", value1, sizeof(value1)) &&
-            IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Video::Height", value2, sizeof(value2)))
+        if (IMB_metadata_get_field(thumb->metadata(), "Thumb::Video::Width", value1) &&
+            IMB_metadata_get_field(thumb->metadata(), "Thumb::Video::Height", value2))
         {
           tooltip_text_field_add(tip,
                                  fmt::format("{} \u00D7 {}", value1, value2),
@@ -282,12 +277,9 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
                                  ui::TIP_STYLE_NORMAL,
                                  ui::TIP_LC_NORMAL);
         }
-        if (IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Video::Frames", value1, sizeof(value1)) &&
-            IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Video::FPS", value2, sizeof(value2)) &&
-            IMB_metadata_get_field(
-                thumb->metadata(), "Thumb::Video::Duration", value3, sizeof(value3)))
+        if (IMB_metadata_get_field(thumb->metadata(), "Thumb::Video::Frames", value1) &&
+            IMB_metadata_get_field(thumb->metadata(), "Thumb::Video::FPS", value2) &&
+            IMB_metadata_get_field(thumb->metadata(), "Thumb::Video::Duration", value3))
         {
           tooltip_text_field_add(
               tip,
@@ -593,7 +585,7 @@ static void file_draw_string(int sx,
   fs = style->widget;
 
   STRNCPY(filename, string);
-  ui::text_clip_middle_ex(&fs, filename, width, UI_ICON_SIZE, sizeof(filename), '\0');
+  ui::text_clip_middle_ex(&fs, filename, width, UI_ICON_SIZE, '\0');
 
   /* no text clipping needed, fontstyle_draw does it but is a bit too strict
    * (for buttons it works) */
@@ -878,15 +870,17 @@ static void file_draw_special_image(const FileDirEntry *file,
                                     const int file_type_icon,
                                     const float icon_aspect,
                                     const FileLayout *layout,
-                                    const bool dimmed)
+                                    const bool dimmed,
+                                    eDirEntry_SelectFlag file_selflag)
 {
   float document_img_col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  const bool selected = file_selflag & FILE_SEL_SELECTED;
   if (file->typeflag & FILE_TYPE_DIR) {
     ui::theme::get_color_4fv(TH_ICON_FOLDER, document_img_col);
   }
   else {
     const uiWidgetColors wcol = ui::theme::theme_get()->tui.wcol_list_item;
-    rgba_uchar_to_float(document_img_col, wcol.item);
+    rgba_uchar_to_float(document_img_col, !selected ? wcol.text : wcol.text_sel);
   }
 
   if (dimmed) {
@@ -978,14 +972,15 @@ static void file_draw_indicator_icons(const FileList *files,
                                       const float preview_icon_aspect,
                                       const int file_type_icon,
                                       const bool has_special_file_image,
-                                      const eDirEntry_SelectFlag /*selflag*/)
+                                      const eDirEntry_SelectFlag file_selflag)
 {
   const bool is_offline = (file->attributes & FILE_ATTR_OFFLINE);
   const bool is_link = (file->attributes & FILE_ATTR_ANY_LINK);
   const bool is_loading = filelist_file_is_preview_pending(files, file);
+  const bool selected = file_selflag & FILE_SEL_SELECTED;
 
   const uiWidgetColors wcol = ui::theme::theme_get()->tui.wcol_list_item;
-  const uchar *icon_color = wcol.item;
+  const uchar *icon_color = !selected ? wcol.text : wcol.text_sel;
   const uchar icon_color_lightness = srgb_to_grayscale_byte(icon_color);
   const bool show_icon_border = (icon_color_lightness > 96);
 
@@ -1097,10 +1092,10 @@ static void renamebutton_cb(bContext &C, StringRefNull oldname)
   ARegion *region = CTX_wm_region(&C);
   FileSelectParams *params = ED_fileselect_get_active_params(sfile);
 
-  BLI_path_join(orgname, sizeof(orgname), params->dir, oldname.c_str());
+  BLI_path_join(orgname, params->dir, oldname.c_str());
   STRNCPY(filename, params->renamefile);
   BLI_path_make_safe_filename(filename);
-  BLI_path_join(newname, sizeof(newname), params->dir, filename);
+  BLI_path_join(newname, params->dir, filename);
 
   if (!STREQ(orgname, newname)) {
     errno = 0;
@@ -1566,8 +1561,13 @@ void file_draw_list(const bContext *C, ARegion *region)
       }
       else {
         /* Larger folder or document icon, with file/folder type icon in the middle (if any). */
-        file_draw_special_image(
-            file, &tile_draw_rect, file_type_icon, thumb_icon_aspect, layout, is_hidden);
+        file_draw_special_image(file,
+                                &tile_draw_rect,
+                                file_type_icon,
+                                thumb_icon_aspect,
+                                layout,
+                                is_hidden,
+                                file_selflag);
         has_special_file_image = true;
       }
 
@@ -1809,7 +1809,7 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
                                                  bool is_project_library)
 {
   char library_ui_path[FILE_MAX_LIBEXTRA];
-  file_path_to_ui_path(asset_params->base_params.dir, library_ui_path, sizeof(library_ui_path));
+  file_path_to_ui_path(asset_params->base_params.dir, library_ui_path);
 
   uchar text_col[4];
   ui::theme::get_color_4ubv(TH_TEXT, text_col);

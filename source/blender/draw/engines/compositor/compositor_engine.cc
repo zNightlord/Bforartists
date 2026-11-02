@@ -18,6 +18,7 @@
 #include "BKE_compositor.hh"
 #include "BKE_compute_context_cache.hh"
 #include "BKE_node.hh"
+#include "BKE_view3d_runtime.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -33,6 +34,8 @@
 #include "COM_result.hh"
 #include "COM_scene_compositor_effects_operation.hh"
 #include "COM_utilities.hh"
+
+#include "NOD_eval_log.hh"
 
 #include "GPU_context.hh"
 #include "GPU_state.hh"
@@ -84,6 +87,15 @@ class Context : public compositor::Context {
     return true;
   }
 
+  nodes::eval_log::NodesEvalLog *nodes_evaluation_log() const override
+  {
+    /* Logging not supported during rendering. */
+    if (DRW_context_get()->is_viewport_image_render()) {
+      return nullptr;
+    }
+    return DRW_context_get()->rv3d->runtime->nodes_evaluation_log.get();
+  }
+
   compositor::SideEffectOutputTypes needed_side_effect_output_types() const override
   {
     return compositor::SideEffectOutputTypes::ViewerNode;
@@ -102,11 +114,6 @@ class Context : public compositor::Context {
   {
     const DRWContext *draw_ctx = DRW_context_get();
 
-    /* No camera region, the domain is the entire viewport. */
-    if (draw_ctx->rv3d->persp != RV3D_CAMOB) {
-      return compositor::Domain(int2(draw_ctx->viewport_size_get()));
-    }
-
     /* A viewport render, the domain is the entire viewport, but we adapt the pixel size to the
      * render size. */
     if (draw_ctx->is_viewport_image_render()) {
@@ -117,6 +124,11 @@ class Context : public compositor::Context {
         domain.pixel_size = float2(this->get_render_data().size / 100.0f);
       }
       return domain;
+    }
+
+    /* No camera region, the domain is the entire viewport. */
+    if (draw_ctx->rv3d->persp != RV3D_CAMOB) {
+      return compositor::Domain(int2(draw_ctx->viewport_size_get()));
     }
 
     const rctf camera_border = BKE_camera_view_border(draw_ctx->scene,
@@ -350,6 +362,10 @@ class Context : public compositor::Context {
 
   void evaluate()
   {
+    /* Reset log before evaluation. */
+    DRW_context_get()->rv3d->runtime->nodes_evaluation_log =
+        std::make_unique<nodes::eval_log::NodesEvalLog>();
+
     compositor::SceneCompositorEffectsOperation operation =
         compositor::SceneCompositorEffectsOperation(*this);
 

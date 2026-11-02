@@ -17,6 +17,7 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_movieclip.hh"
 #include "BKE_object_types.hh"
+#include "BKE_view3d_runtime.hh"
 
 #include "ED_asset.hh"
 #include "ED_buttons.hh"
@@ -1263,7 +1264,11 @@ static void rna_SpaceView3D_use_local_camera_set(PointerRNA *ptr, bool value)
   v3d->scenelock = !value;
 
   if (!value) {
-    Scene *scene = ED_screen_scene_find(screen, G_MAIN->wm.first());
+    const Main *bmain = screen->id.owner_bmain();
+    if (!bmain) {
+      return;
+    }
+    Scene *scene = ED_screen_scene_find(screen, bmain->wm.first());
     /* nullptr if the screen isn't in an active window (happens when setting from Python).
      * This could be moved to the update function, in that case the scene won't relate to the
      * screen so keep it working this way. */
@@ -1277,7 +1282,11 @@ static float rna_View3DOverlay_GridScaleUnit_get(PointerRNA *ptr)
 {
   View3D *v3d = static_cast<View3D *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-  Scene *scene = ED_screen_scene_find(screen, G_MAIN->wm.first());
+  const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    return 1.0f;
+  }
+  Scene *scene = ED_screen_scene_find(screen, bmain->wm.first());
   if (scene != nullptr) {
     return ED_view3d_grid_scale(scene, v3d, nullptr);
   }
@@ -1396,7 +1405,7 @@ static void rna_RegionView3D_quadview_clip_update(Main * /*main*/,
 static RenderEngine *rna_RegionView3D_engine_get(const PointerRNA *ptr)
 {
   const RegionView3D *rv3d = static_cast<RegionView3D *>(ptr->data);
-  return rv3d->view_render ? RE_view_engine_get(rv3d->view_render) : nullptr;
+  return rv3d->runtime->view_render ? RE_view_engine_get(rv3d->runtime->view_render) : nullptr;
 }
 
 static bool rna_RegionView3D_pause_render_get(PointerRNA *ptr)
@@ -1418,8 +1427,8 @@ static void rna_RegionView3D_pause_render_set(PointerRNA *ptr, const bool value)
         continue;
       }
       const RegionView3D *rv3d = static_cast<RegionView3D *>(region_iter.regiondata);
-      if (rv3d && rv3d->view_render) {
-        if (RenderEngine *engine = RE_view_engine_get(rv3d->view_render)) {
+      if (rv3d && rv3d->runtime->view_render) {
+        if (RenderEngine *engine = RE_view_engine_get(rv3d->runtime->view_render)) {
           RE_engine_view_pause_set(engine, value);
         }
       }
@@ -1583,7 +1592,11 @@ static Scene *rna_3DViewShading_scene(PointerRNA *ptr)
   }
   else {
     bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    return WM_windows_scene_get_from_screen(G_MAIN->wm.first(), screen);
+    const Main *bmain = screen->id.owner_bmain();
+    if (!bmain) {
+      return nullptr;
+    }
+    return WM_windows_scene_get_from_screen(bmain->wm.first(), screen);
   }
 }
 
@@ -1600,7 +1613,11 @@ static ViewLayer *rna_3DViewShading_view_layer(PointerRNA *ptr)
   }
   else {
     bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    return WM_windows_view_layer_get_from_screen(G_MAIN->wm.first(), screen);
+    const Main *bmain = screen->id.owner_bmain();
+    if (!bmain) {
+      return nullptr;
+    }
+    return WM_windows_view_layer_get_from_screen(bmain->wm.first(), screen);
   }
 }
 
@@ -2096,14 +2113,16 @@ static bool rna_SpaceImageEditor_show_uvedit_get(PointerRNA *ptr)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
+  const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    return false;
+  }
   Object *obedit = nullptr;
-  wmWindow *win = ED_screen_window_find(screen, G_MAIN->wm.first());
+  wmWindow *win = ED_screen_window_find(screen, bmain->wm.first());
   if (win != nullptr) {
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-    /* FIXME Using G_MAIN is weak, but should work in practice given current context
-     * (code already relies on 'G_MAIN data'). */
-    BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     obedit = BKE_view_layer_edit_object_get(view_layer);
   }
   return ED_space_image_show_uvedit(sima, obedit);
@@ -2113,14 +2132,16 @@ static bool rna_SpaceImageEditor_show_maskedit_get(PointerRNA *ptr)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
+  const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    return false;
+  }
   Object *obedit = nullptr;
-  wmWindow *win = ED_screen_window_find(screen, G_MAIN->wm.first());
+  wmWindow *win = ED_screen_window_find(screen, bmain->wm.first());
   if (win != nullptr) {
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-    /* FIXME Using G_MAIN is weak, but should work in practice given current context
-     * (code already relies on 'G_MAIN data'). */
-    BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     obedit = BKE_view_layer_edit_object_get(view_layer);
   }
   return ED_space_image_check_show_maskedit(sima, obedit);
@@ -2130,9 +2151,9 @@ static void rna_SpaceImageEditor_image_set(PointerRNA *ptr,
                                            PointerRNA value,
                                            ReportList * /*reports*/)
 {
-  BLI_assert(BKE_id_is_in_global_main(static_cast<ID *>(value.data)));
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
-  ED_space_image_set(G_MAIN, sima, static_cast<Image *>(value.data), false);
+  ED_space_image_set(
+      ptr->owner_id->owner_bmain_for_write(), sima, static_cast<Image *>(value.data), false);
 }
 
 static void rna_SpaceImageEditor_mask_set(PointerRNA *ptr,
@@ -2258,7 +2279,7 @@ static void rna_SpaceImageEditor_cursor_location_set(PointerRNA *ptr, const floa
   }
 }
 
-static void rna_SpaceImageEditor_image_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+static void rna_SpaceImageEditor_image_update(Main * /*bmain*/, Scene *scene, PointerRNA *ptr)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   Image *ima = sima->image;
@@ -2273,6 +2294,12 @@ static void rna_SpaceImageEditor_image_update(Main * /*bmain*/, Scene * /*scene*
     else {
       BKE_image_multiview_index(ima, &sima->iuser);
     }
+  }
+
+  /* If the new image is the viewer image, we tag the compositor to execute to update the viewer
+   * image. */
+  if (ima && ima->source == IMA_SRC_VIEWER && ima->type == IMA_TYPE_COMPOSITE) {
+    DEG_id_tag_update(&scene->id, ID_RECALC_COMPOSITOR);
   }
 }
 
@@ -6083,6 +6110,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_local_camera", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "scenelock", 1);
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_SpaceView3D_use_local_camera_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop,
                            "Use Local Camera",
                            "Use a local camera in this view, rather than scene's active camera");
@@ -6561,6 +6589,7 @@ static void rna_def_space_image(BlenderRNA *brna)
   prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_funcs(
       prop, nullptr, "rna_SpaceImageEditor_image_set", nullptr, nullptr);
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Image", "Image displayed and edited in this space");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_clear_flag(prop, PROP_ID_REFCOUNT);

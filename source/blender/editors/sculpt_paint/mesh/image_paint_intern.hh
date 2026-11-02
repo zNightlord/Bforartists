@@ -26,6 +26,7 @@ struct TileColorspaceProcessor : NonCopyable {
 };
 
 using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan<uchar4>>;
+using MaskBufferType = std::variant<std::monostate, Span<float4>, Span<uchar4>>;
 
 struct ImageData : NonCopyable {
   Image *image = nullptr;
@@ -33,13 +34,14 @@ struct ImageData : NonCopyable {
 
   Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
   Map<bke::image::TileNumber, BufferType> data_buffers = {};
+  Map<bke::image::TileNumber, MaskBufferType> mask_buffers = {};
   Map<bke::image::TileNumber, TileColorspaceProcessor> processors = {};
 
   /** Per undo tile, to quickly check if it was already pushed. */
   Map<bke::image::TileNumber, Array<uint32_t>> undo_tile_pushed = {};
 
   /** Per seam tile modified state, to only do seam bleeding where needed. */
-  Map<bke::image::TileNumber, Array<uint8_t>> seam_tile_modified = {};
+  Map<bke::image::TileNumber, Array<bool>> seam_tile_modified = {};
 
   ~ImageData();
 
@@ -56,10 +58,11 @@ struct ImageData : NonCopyable {
 };
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
-                             const Paint &paint,
+                             const ImagePaintSettings &paint_settings,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
+                             ImageData *mask_data,
                              const IndexMask &node_mask);
 /** \} */
 }  // namespace blender::ed::sculpt_paint::image

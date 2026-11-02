@@ -284,23 +284,16 @@ static void do_color_smooth_task(const Depsgraph &depsgraph,
 
   tls.opacity_factors.resize(verts.size());
   const MutableSpan<float> factors = tls.opacity_factors;
-  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
-  filter_region_clip_factors(ss, vert_positions, verts, factors);
-  if (brush.flag & BRUSH_FRONTFACE) {
-    calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
-  }
-
   tls.distances.resize(verts.size());
-  const MutableSpan<float> distances = tls.distances;
-  calc_brush_distances(
-      ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
-  filter_distances_with_radius(cache.radius, distances, factors);
-  apply_hardness_to_distances(cache, distances);
-  calc_brush_strength_factors(cache, brush, distances, factors);
-
-  auto_mask::calc_vert_factors(depsgraph, object, cache.automasking.get(), node, verts, factors);
-
-  calc_brush_texture_factors(PaintMode::Sculpt, ss, brush, vert_positions, verts, factors);
+  calc_factors_common_mesh_indexed(depsgraph,
+                                   brush,
+                                   object,
+                                   attribute_data,
+                                   vert_positions,
+                                   vert_normals,
+                                   node,
+                                   factors,
+                                   tls.distances);
   scale_factors(factors, cache.bstrength);
 
   tls.colors.resize(verts.size());
@@ -421,7 +414,11 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
   }
 
   calc_brush_texture_factors(PaintMode::Sculpt, ss, brush, vert_positions, verts, flow_factors);
-  scale_factors(opacity_factors, bstrength);
+  /* TODO: This is technically not correct, the bstrength (strength pressure value) should affect
+   * the overall capped stroke opacity, however, doing so requires further changes to avoid odd
+   * behavior when going back over a painted stroke with less pressure. Keep the old behavior for
+   * now. */
+  scale_factors(flow_factors, bstrength);
 
   const float density = ss.cache->paint_brush.density;
   if (density < 1.0f) {
@@ -487,6 +484,10 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
   }
 
   for (const int i : verts.index_range()) {
+    if (flow_factors[i] == 0.0f) {
+      continue;
+    }
+
     float4 daub_color;
     blend_color_interpolate_float(
         daub_color, brush_color, wet_mix_sampled_color, ss.cache->paint_brush.wet_mix);
@@ -495,14 +496,14 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
     daub_color = daub_color * flow_factors[i] * ss.cache->paint_brush.flow;
     blend_color_mix_float(color_buffer[i], color_buffer[i], daub_color);
 
-    /* The max (or min) value of the stroke, dependent on the brush opacity. */
-    const float4 buffer_color = color_buffer[i] * alpha;
+    /* The color we are attempting to actually apply to the mesh, capped by the brush opacity. */
+    const float4 paint_color = color_buffer[i] * alpha;
+    IMB_blend_color_float(new_colors[i], orig_colors[i], paint_color, IMB_BlendMode(brush.blend));
+
+    /* The max (or min) value of the stroke, dependent on the brush opacity and mesh values. */
+    const float4 buffer_color = color_buffer[i] * opacity_factors[i] * alpha;
     float4 color_test;
     IMB_blend_color_float(color_test, orig_colors[i], buffer_color, IMB_BlendMode(brush.blend));
-
-    /* The color we are attempting to actually paint. */
-    const float4 paint_color = color_buffer[i] * opacity_factors[i];
-    IMB_blend_color_float(new_colors[i], orig_colors[i], paint_color, IMB_BlendMode(brush.blend));
 
     float4 min(std::numeric_limits<float>::max());
     float4 max(std::numeric_limits<float>::lowest());
@@ -511,18 +512,21 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
 
     /* The final color is clamped by the original color and max value of the brush opacity */
     new_colors[i] = math::clamp(new_colors[i], min, max);
+    new_colors[i] = math::clamp(new_colors[i], 0.0f, 1.0f);
   }
 
   scatter_data_mesh(color_buffer.as_span(), verts, mix_colors);
 
   for (const int i : verts.index_range()) {
-    color_vert_set(faces,
-                   corner_verts,
-                   vert_to_face_map,
-                   color_attribute.domain,
-                   verts[i],
-                   new_colors[i],
-                   color_attribute.span);
+    if (flow_factors[i] != 0.0f) {
+      color_vert_set(faces,
+                     corner_verts,
+                     vert_to_face_map,
+                     color_attribute.domain,
+                     verts[i],
+                     new_colors[i],
+                     color_attribute.span);
+    }
   }
 }
 
@@ -603,7 +607,7 @@ void do_paint_brush(const Depsgraph &depsgraph,
   /* If the brush is round the tip does not need to be aligned to the surface, so this saves a
    * whole iteration over the affected nodes. */
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    mat = cube_tip_init(sd, ob, brush);
+    mat = cube_tip_init(ob, brush);
 
     if (math::is_zero(mat)) {
       return;
@@ -717,30 +721,22 @@ static void do_smear_brush_task(const Depsgraph &depsgraph,
                                 bke::GSpanAttributeWriter &color_attribute)
 {
   const SculptSession &ss = *object.runtime->sculpt_session;
-  const StrokeCache &cache = *ss.cache;
   const float strength = ss.cache->bstrength;
 
   const Span<int> verts = node.verts();
 
   tls.opacity_factors.resize(verts.size());
   const MutableSpan<float> factors = tls.opacity_factors;
-  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
-  filter_region_clip_factors(ss, vert_positions, verts, factors);
-  if (brush.flag & BRUSH_FRONTFACE) {
-    calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
-  }
-
   tls.distances.resize(verts.size());
-  const MutableSpan<float> distances = tls.distances;
-  calc_brush_distances(
-      ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances);
-  filter_distances_with_radius(cache.radius, distances, factors);
-  apply_hardness_to_distances(cache, distances);
-  calc_brush_strength_factors(cache, brush, distances, factors);
-
-  auto_mask::calc_vert_factors(depsgraph, object, cache.automasking.get(), node, verts, factors);
-
-  calc_brush_texture_factors(PaintMode::Sculpt, ss, brush, vert_positions, verts, factors);
+  calc_factors_common_mesh_indexed(depsgraph,
+                                   brush,
+                                   object,
+                                   attribute_data,
+                                   vert_positions,
+                                   vert_normals,
+                                   node,
+                                   factors,
+                                   tls.distances);
   scale_factors(factors, strength);
 
   float3 brush_delta;

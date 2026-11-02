@@ -207,6 +207,8 @@ static void calc_grids(const Depsgraph &depsgraph,
   const Span<int> grids = node.grids();
   const MutableSpan positions = gather_grids_positions(subdiv_ccg, grids, tls.positions);
 
+  tls.factors.resize(positions.size());
+  tls.distances.resize(positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -261,6 +263,8 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   const Set<BMVert *, 0> &verts = BKE_pbvh_bmesh_node_unique_verts(&node);
   const MutableSpan positions = gather_bmesh_positions(verts, tls.positions);
 
+  tls.factors.resize(positions.size());
+  tls.distances.resize(positions.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.local_positions.resize(positions.size());
     const MutableSpan<float3> local_positions = tls.local_positions;
@@ -306,7 +310,7 @@ void do_smooth_brush(const Depsgraph &depsgraph,
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
-  const float4x4 mat = cube_tip_init(sd, object, brush);
+  const float4x4 mat = cube_tip_init(object, brush);
 
   boundary::ensure_boundary_info(object);
 

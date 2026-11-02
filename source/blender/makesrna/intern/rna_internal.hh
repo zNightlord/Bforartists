@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include "BLI_compiler_attrs.hh"
+#include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_utildefines.hh"
 
@@ -190,6 +191,11 @@ void RNA_def_meta(BlenderRNA *brna);
 void RNA_def_modifier(BlenderRNA *brna);
 void RNA_def_nla(BlenderRNA *brna);
 void RNA_def_nodetree(BlenderRNA *brna);
+void RNA_def_nodes_compositor(BlenderRNA *brna);
+void RNA_def_nodes_function(BlenderRNA *brna);
+void RNA_def_nodes_geometry(BlenderRNA *brna);
+void RNA_def_nodes_shader(BlenderRNA *brna);
+void RNA_def_nodes_texture(BlenderRNA *brna);
 void RNA_def_node_socket_subtypes(BlenderRNA *brna);
 void RNA_def_node_tree_interface(BlenderRNA *brna);
 void RNA_def_object(BlenderRNA *brna);
@@ -299,6 +305,7 @@ void rna_def_texpaint_slots(BlenderRNA *brna, StructRNA *srna);
 void rna_def_view_layer_common(BlenderRNA *brna, StructRNA *srna, bool scene);
 
 int rna_AssetMetaData_editable(const PointerRNA *ptr, const char **r_info);
+int rna_ID_owner_editable_if_in_bmain(const PointerRNA *ptr, const char **r_info);
 /**
  * Create a enum property for the available asset libraries that should be displayed in the UI.
  * Does not include the online essentials library, which should be displayed as part of the normal
@@ -342,18 +349,9 @@ StructRNA *rna_PropertyGroup_refine(PointerRNA *ptr);
 void rna_object_vgroup_name_index_get(PointerRNA *ptr, char *value, int index);
 int rna_object_vgroup_name_index_length(PointerRNA *ptr, int index);
 void rna_object_vgroup_name_index_set(PointerRNA *ptr, const char *value, short *index);
-void rna_object_vgroup_name_set(PointerRNA *ptr,
-                                const char *value,
-                                char *result,
-                                int result_maxncpy);
-void rna_object_uvlayer_name_set(PointerRNA *ptr,
-                                 const char *value,
-                                 char *result,
-                                 int result_maxncpy);
-void rna_object_vcollayer_name_set(PointerRNA *ptr,
-                                   const char *value,
-                                   char *result,
-                                   int result_maxncpy);
+void rna_object_vgroup_name_set(PointerRNA *ptr, const char *value, MutableCStr result);
+void rna_object_uvlayer_name_set(PointerRNA *ptr, const char *value, MutableCStr result);
+void rna_object_vcollayer_name_set(PointerRNA *ptr, const char *value, MutableCStr result);
 PointerRNA rna_object_shapekey_index_get(ID *id, int value);
 int rna_object_shapekey_index_set(ID *id, PointerRNA value, int current);
 
@@ -402,12 +400,10 @@ int rna_ViewLayer_active_lightgroup_index_get(PointerRNA *ptr);
 void rna_ViewLayer_active_lightgroup_index_set(PointerRNA *ptr, int value);
 /**
  * Set `r_rna_path` with the base view-layer path.
- * `r_rna_path_maxncpy` should be at least `sizeof(ViewLayer.name) * 3`.
+ * `r_rna_path.size()` should be at least `sizeof(ViewLayer.name) * 3`.
  * \return actual length of the generated RNA path.
  */
-size_t rna_ViewLayer_path_buffer_get(const ViewLayer *view_layer,
-                                     char *r_rna_path,
-                                     const size_t r_rna_path_maxncpy);
+size_t rna_ViewLayer_path_buffer_get(const ViewLayer *view_layer, MutableCStr r_rna_path);
 
 /* named internal so as not to conflict with obj.update() rna func */
 void rna_Object_internal_update_data(Main *bmain, Scene *scene, PointerRNA *ptr);

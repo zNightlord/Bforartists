@@ -1154,7 +1154,9 @@ struct UserDef {
   char gizmo_size = 75;
   /** Navigate gizmo size. */
   char gizmo_size_navigate_v3d = 80;
-  char _pad3[5] = {};
+  /** Curving of node links. */
+  char noodle_curving = 4;
+  char _pad3[4] = {};
   short edit_studio_light = 0;
   short lookdev_sphere_size = 150;
   short vbotimeout = 120, vbocollectrate = 60;
@@ -1189,7 +1191,7 @@ struct UserDef {
   eZoomFrame_Mode view_frame_type = ZOOM_FRAME_MODE_KEEP_RANGE;
 
   /** Number of keyframes to zoom around current frame. */
-  int view_frame_keyframes = 0;
+  int view_frame_keyframes = 1;
   /** Seconds to zoom around current frame. */
   float view_frame_seconds = 0;
 

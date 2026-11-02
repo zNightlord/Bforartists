@@ -1503,14 +1503,14 @@ static void rna_property_override_diff_propptr_validate_diffing(
     char buff_b[4096];
     if (nameprop_a != nullptr) {
       rna_itemname_a = RNA_property_string_get_alloc(
-          propptr_a, nameprop_a, buff_a, sizeof(buff_a), &rna_itemname_a_len);
+          propptr_a, nameprop_a, buff_a, &rna_itemname_a_len);
       //          printf("rna_itemname_a = %s\n", rna_itemname_a ? rna_itemname_a : "<NONE>");
       ptrdiff_ctx.rna_itemname_a = rna_itemname_a;
     }
     //      else printf("item of type %s a has no name property!\n", propptr_a->type->name);
     if (nameprop_b != nullptr) {
       rna_itemname_b = RNA_property_string_get_alloc(
-          propptr_b, nameprop_b, buff_b, sizeof(buff_b), &rna_itemname_b_len);
+          propptr_b, nameprop_b, buff_b, &rna_itemname_b_len);
       ptrdiff_ctx.rna_itemname_b = rna_itemname_b;
     }
 
@@ -1736,8 +1736,7 @@ static void rna_property_override_diff_propptr(Main *bmain,
           BLI_assert(*rna_itemname_a == *rna_itemname_b);
 
           char esc_item_name[RNA_PATH_BUFFSIZE];
-          const size_t esc_item_name_len = BLI_str_escape(
-              esc_item_name, rna_itemname_a->c_str(), sizeof(esc_item_name));
+          const size_t esc_item_name_len = BLI_str_escape(esc_item_name, rna_itemname_a->c_str());
           extended_rna_path_len = rna_path_len + 2 + esc_item_name_len + 2;
           if (extended_rna_path_len >= RNA_PATH_BUFFSIZE) {
             extended_rna_path = MEM_new_array_uninitialized<char>(extended_rna_path_len + 1,
@@ -2135,10 +2134,8 @@ void rna_property_override_diff_default(Main *bmain, RNAPropertyOverrideDiffCont
     case PROP_STRING: {
       char fixed_a[4096], fixed_b[4096];
       int len_str_a, len_str_b;
-      char *value_a = RNA_property_string_get_alloc(
-          ptr_a, rawprop_a, fixed_a, sizeof(fixed_a), &len_str_a);
-      char *value_b = RNA_property_string_get_alloc(
-          ptr_b, rawprop_b, fixed_b, sizeof(fixed_b), &len_str_b);
+      char *value_a = RNA_property_string_get_alloc(ptr_a, rawprop_a, fixed_a, &len_str_a);
+      char *value_b = RNA_property_string_get_alloc(ptr_b, rawprop_b, fixed_b, &len_str_b);
 /* TODO: we could do a check on length too,
  * but then we would not have a 'real' string comparison...
  * Maybe behind a eRNAOverrideMatch flag? */
@@ -2738,14 +2735,23 @@ bool rna_property_override_apply_default(Main *bmain,
   UNUSED_VARS_NDEBUG(len_src, len_storage);
 
   const bool is_array = len_dst > 0;
-  const int index = is_array ? opop->subitem_reference_index : 0;
+  /* If only one of the indices is set, use it for both destination and source. */
+  const int index_dst = !is_array                           ? 0 :
+                        opop->subitem_reference_index != -1 ? opop->subitem_reference_index :
+                                                              opop->subitem_local_index;
+  const int index_src = !is_array                       ? 0 :
+                        opop->subitem_local_index != -1 ? opop->subitem_local_index :
+                                                          opop->subitem_reference_index;
+  BLI_assert_msg((!ELEM(-1, index_dst, index_src) || index_dst == index_src),
+                 "Destination and source indices must both be valid values, or `-1` to copy the "
+                 "whole arrays");
   const eID_OverrideLib_Op override_op = opop->operation;
 
   bool ret_success = true;
 
   switch (RNA_property_type(prop_dst)) {
     case PROP_BOOLEAN:
-      if (is_array && index == -1) {
+      if (is_array && ELEM(-1, index_dst, index_src)) {
         bool array_stack_a[RNA_STACK_ARRAY];
         bool *array_a;
 
@@ -2771,11 +2777,11 @@ bool rna_property_override_apply_default(Main *bmain,
         }
       }
       else {
-        const bool value = RNA_PROPERTY_GET_SINGLE(boolean, ptr_src, prop_src, index);
+        const bool value = RNA_PROPERTY_GET_SINGLE(boolean, ptr_src, prop_src, index_src);
 
         switch (override_op) {
           case LIBOVERRIDE_OP_REPLACE:
-            RNA_PROPERTY_SET_SINGLE(boolean, ptr_dst, prop_dst, index, value);
+            RNA_PROPERTY_SET_SINGLE(boolean, ptr_dst, prop_dst, index_dst, value);
             break;
           default:
             CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
@@ -2786,7 +2792,7 @@ bool rna_property_override_apply_default(Main *bmain,
       }
       break;
     case PROP_INT:
-      if (is_array && index == -1) {
+      if (is_array && ELEM(-1, index_dst, index_src)) {
         int array_stack_a[RNA_STACK_ARRAY], array_stack_b[RNA_STACK_ARRAY];
         int *array_a, *array_b;
 
@@ -2834,7 +2840,7 @@ bool rna_property_override_apply_default(Main *bmain,
       }
       else {
         const int storage_value = prop_storage ? RNA_PROPERTY_GET_SINGLE(
-                                                     int, ptr_storage, prop_storage, index) :
+                                                     int, ptr_storage, prop_storage, index_dst) :
                                                  0;
 
         switch (override_op) {
@@ -2842,23 +2848,23 @@ bool rna_property_override_apply_default(Main *bmain,
             RNA_PROPERTY_SET_SINGLE(int,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(int, ptr_src, prop_src, index));
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(int, ptr_src, prop_src, index_src));
             break;
           case LIBOVERRIDE_OP_ADD:
             RNA_PROPERTY_SET_SINGLE(int,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(int, ptr_dst, prop_dst, index) -
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(int, ptr_dst, prop_dst, index_dst) +
                                         storage_value);
             break;
           case LIBOVERRIDE_OP_SUBTRACT:
             RNA_PROPERTY_SET_SINGLE(int,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(int, ptr_dst, prop_dst, index) -
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(int, ptr_dst, prop_dst, index_dst) -
                                         storage_value);
             break;
           default:
@@ -2870,7 +2876,7 @@ bool rna_property_override_apply_default(Main *bmain,
       }
       break;
     case PROP_FLOAT:
-      if (is_array && index == -1) {
+      if (is_array && ELEM(-1, index_dst, index_src)) {
         float array_stack_a[RNA_STACK_ARRAY], array_stack_b[RNA_STACK_ARRAY];
         float *array_a, *array_b;
 
@@ -2923,40 +2929,41 @@ bool rna_property_override_apply_default(Main *bmain,
         }
       }
       else {
-        const float storage_value = prop_storage ? RNA_PROPERTY_GET_SINGLE(
-                                                       float, ptr_storage, prop_storage, index) :
-                                                   0.0f;
+        const float storage_value = prop_storage ?
+                                        RNA_PROPERTY_GET_SINGLE(
+                                            float, ptr_storage, prop_storage, index_dst) :
+                                        0.0f;
 
         switch (override_op) {
           case LIBOVERRIDE_OP_REPLACE:
             RNA_PROPERTY_SET_SINGLE(float,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(float, ptr_src, prop_src, index));
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(float, ptr_src, prop_src, index_src));
             break;
           case LIBOVERRIDE_OP_ADD:
             RNA_PROPERTY_SET_SINGLE(float,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(float, ptr_dst, prop_dst, index) +
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(float, ptr_dst, prop_dst, index_dst) +
                                         storage_value);
             break;
           case LIBOVERRIDE_OP_SUBTRACT:
             RNA_PROPERTY_SET_SINGLE(float,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(float, ptr_dst, prop_dst, index) -
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(float, ptr_dst, prop_dst, index_dst) -
                                         storage_value);
             break;
           case LIBOVERRIDE_OP_MULTIPLY:
             RNA_PROPERTY_SET_SINGLE(float,
                                     ptr_dst,
                                     prop_dst,
-                                    index,
-                                    RNA_PROPERTY_GET_SINGLE(float, ptr_dst, prop_dst, index) *
+                                    index_dst,
+                                    RNA_PROPERTY_GET_SINGLE(float, ptr_dst, prop_dst, index_dst) *
                                         storage_value);
             break;
           default:
@@ -2970,8 +2977,57 @@ bool rna_property_override_apply_default(Main *bmain,
     case PROP_ENUM: {
       const int value = RNA_property_enum_get(ptr_src, prop_src);
 
+      /* Basic validation of assigned value when source and destination properties are different.
+       *
+       * NOTE: This will not handle properly dynamically generated enum items requiring a bContext
+       * pointer (validation will most likely fail, and assignment will not happen). This is
+       * currently considered an acceptable trade-off.
+       */
+      auto validate_enum_value = [](PointerRNA *ptr, PropertyRNA *prop, const int value) -> bool {
+        const EnumPropertyItem *enum_items_first = nullptr;
+        int tot_items = 0;
+        bool free_items = false;
+        RNA_property_enum_items_ex(
+            nullptr, ptr, prop, false, &enum_items_first, &tot_items, &free_items);
+        Span<EnumPropertyItem> enum_items(enum_items_first, tot_items);
+
+        bool result = false;
+        if (RNA_property_flag(prop) & PROP_ENUM_FLAG) {
+          int enum_bitmask = 0;
+          for (const EnumPropertyItem &enum_item : enum_items) {
+            if (enum_item.identifier && enum_item.identifier[0]) {
+              enum_bitmask |= enum_item.value;
+            }
+          }
+          if ((value & (~enum_bitmask)) == 0) {
+            result = true;
+          }
+        }
+        else {
+          for (const EnumPropertyItem &enum_item : enum_items) {
+            if (enum_item.identifier && enum_item.identifier[0]) {
+              if (enum_item.value == value) {
+                result = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (free_items) {
+          MEM_delete(enum_items_first);
+        }
+        return result;
+      };
+
       switch (override_op) {
         case LIBOVERRIDE_OP_REPLACE:
+          if (prop_dst != prop_src && !validate_enum_value(ptr_dst, prop_dst, value)) {
+            CLOG_ERROR(
+                &LOG_COMPARE_OVERRIDE,
+                "The source property enum value is incompatible with the destination property");
+            return false;
+          }
           RNA_property_enum_set(ptr_dst, prop_dst, value);
           break;
         /* TODO: support add/sub, for bitflags? */
@@ -3000,7 +3056,7 @@ bool rna_property_override_apply_default(Main *bmain,
     }
     case PROP_STRING: {
       char buff[256];
-      char *value = RNA_property_string_get_alloc(ptr_src, prop_src, buff, sizeof(buff), nullptr);
+      char *value = RNA_property_string_get_alloc(ptr_src, prop_src, buff, nullptr);
 
       switch (override_op) {
         case LIBOVERRIDE_OP_REPLACE:
