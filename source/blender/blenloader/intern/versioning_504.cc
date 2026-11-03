@@ -120,7 +120,7 @@ void blo_do_versions_504(FileData *fd, Library * /*lib*/, Main *bmain)
             if (ebone.flag & BONE_NO_DEFORM) {
               continue;
             }
-            ED_armature_ebone_weight_color_set(arm->edbo, &bone);
+            ED_armature_ebone_weight_color_set(arm.edbo, &bone);
           }
         }
       }
