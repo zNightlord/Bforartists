@@ -114,7 +114,8 @@ void blo_do_versions_504(FileData *fd, Library * /*lib*/, Main *bmain)
   /* Weight color on bones should be for deform bones only here. */
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 504, 6)) {
     if (!DNA_struct_member_exists(fd->filesdna, "Bone", "float", "weight_color")) {
-      for (bArmature *arm : bmain->armatures)
+      for (bArmature *arm = bmain->armatures.first(); arm != nullptr;
+           arm = arm->id.next())
       {
         for (EditBone &bone : *arm->edbo) {
           if (bone.flag & BONE_NO_DEFORM){
