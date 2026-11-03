@@ -7,12 +7,12 @@
  */
 
 #define DNA_DEPRECATED_ALLOW
-#define DNA_GENFILE_VERSIONING_MACROS
+#define DNA_GENFILE_VERSIONING_MACROS_LEGACY
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
 #include "DNA_genfile.h"
 #include "DNA_mesh_types.h"
-#undef DNA_GENFILE_VERSIONING_MACROS
+#undef DNA_GENFILE_VERSIONING_MACROS_LEGACY
 
 #include "ED_armature.hh"
 
