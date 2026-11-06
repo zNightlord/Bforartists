@@ -430,7 +430,7 @@ static ui::Block *wm_block_splash_create(bContext *C, ARegion *region, void * /*
                                                   ui::LayoutType::Panel,
                                                   splash_width - project_width - project_margin,
                                                   0.5f * U.widget_unit + project_margin -
-                                                      UI_UNIT_Y * 2,
+                                                      UI_UNIT_Y * 1.25f,
                                                   project_width,
                                                   0,
                                                   0,
