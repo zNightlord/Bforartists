@@ -5415,10 +5415,63 @@ struct DropBlendFileData {
   bool use_scripts;
 };
 
-static bool drop_blend_file_is_autoexec(const char *filepath, const bool skip_overrides)
+static void drop_blend_open_cb(bContext *C, void *arg_block, void *arg_data)
 {
-  /* Mirrors bpy.path.is_autoexec(..., skip_overrides=..., canonicalize=True, strip_filename=True) */
-  return BLI_path_is_autoexec(filepath, skip_overrides, true /*canonicalize*/, true /*strip_filename*/);
+  DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_data);
+
+  PointerRNA props_ptr;
+  WM_operator_properties_create_ptr(&props_ptr, WM_operatortype_find("WM_OT_open_mainfile", false));
+
+  RNA_string_set(&props_ptr, "filepath", data->filepath);
+  RNA_boolean_set(&props_ptr, "display_file_selector", false);
+  RNA_boolean_set(&props_ptr, "use_scripts", data->use_scripts);
+
+  WM_operator_name_call_ptr(C,
+                            WM_operatortype_find("WM_OT_open_mainfile", false),
+                            wm::OpCallContext::InvokeDefault,
+                            &props_ptr,
+                            nullptr);
+
+  WM_operator_properties_free(&props_ptr);
+
+  /* Close the popup. */
+  ui::popup_block_close(C, static_cast<ui::Block *>(arg_block));
+}
+
+static void drop_blend_link_cb(bContext *C, void *arg_block, void *arg_data)
+{
+  DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_data);
+
+  PointerRNA props_ptr;
+  WM_operator_properties_create_ptr(&props_ptr, WM_operatortype_find("WM_OT_link", false));
+  RNA_string_set(&props_ptr, "filepath", data->filepath);
+
+  WM_operator_name_call_ptr(C,
+                            WM_operatortype_find("WM_OT_link", false),
+                            wm::OpCallContext::InvokeDefault,
+                            &props_ptr,
+                            nullptr);
+
+  WM_operator_properties_free(&props_ptr);
+  ui::popup_block_close(C, static_cast<ui::Block *>(arg_block));
+}
+
+static void drop_blend_append_cb(bContext *C, void *arg_block, void *arg_data)
+{
+  DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_data);
+
+  PointerRNA props_ptr;
+  WM_operator_properties_create_ptr(&props_ptr, WM_operatortype_find("WM_OT_append", false));
+  RNA_string_set(&props_ptr, "filepath", data->filepath);
+
+  WM_operator_name_call_ptr(C,
+                            WM_operatortype_find("WM_OT_append", false),
+                            wm::OpCallContext::InvokeDefault,
+                            &props_ptr,
+                            nullptr);
+
+  WM_operator_properties_free(&props_ptr);
+  ui::popup_block_close(C, static_cast<ui::Block *>(arg_block));
 }
 
 static ui::Block *block_create__drop_blendfile_dialog(bContext *C, ARegion *region, void *arg_v)
@@ -5432,112 +5485,93 @@ static ui::Block *block_create__drop_blendfile_dialog(bContext *C, ARegion *regi
                             ui::BLOCK_NUMSELECT);
   ui::block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
 
-  ui::Layout &layout = *ui::items_alert_box(block, 28, ui::AlertIcon::Question);
+  ui::Layout &layout = *uiItemsAlertBox(block, 28, ui::AlertIcon::Question);
 
-  /* Title / filename. */
+  /* Filename. */
   char filename[FILE_MAX];
   BLI_path_split_file_part(filepath, filename, sizeof(filename));
   layout.label(filename, ICON_QUESTION);
 
   layout.separator();
 
-  /* --- Open button (primary action) --- */
+  /* --- Open button (primary) --- */
   {
-    ui::Layout &col = layout.column(false);
-    col.active_default_set(true);
-
-    PointerRNA props_ptr;
-    ui::Button *but = ui::def_but_operator(
-        block,
-        ui::ButtonType::But,
-        IFACE_("Open"),
-        ICON_FILE_FOLDER,
-        0,
-        0,
-        UI_UNIT_X * 10,
-        UI_UNIT_Y,
-        "WM_OT_open_mainfile",
-        WM_OP_INVOKE_DEFAULT,
-        &props_ptr);
-
-    RNA_string_set(&props_ptr, "filepath", filepath);
-    RNA_boolean_set(&props_ptr, "display_file_selector", false);
-    RNA_boolean_set(&props_ptr, "use_scripts", data->use_scripts);
-
-    ui::button_flag_enable(but, UI_BUT_ACTIVE_DEFAULT);
+    ui::Button *but = uiDefIconTextBut(block,
+                                       ui::ButtonType::But,
+                                       ICON_FILE_FOLDER,
+                                       IFACE_("Open"),
+                                       0,
+                                       0,
+                                       0,
+                                       UI_UNIT_Y + UI_UNIT_Y / 2,
+                                       nullptr,
+                                       "");
+    button_func_set(but, drop_blend_open_cb, block, data);
+    button_drawflag_disable(but, ui::BUT_TEXT_LEFT);
+    button_flag_enable(but, ui::BUT_ACTIVE_DEFAULT);
   }
 
   /* Trusted Source checkbox. */
   {
-    const bool is_untrusted =
-        (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0 &&
-        (G.f & G_FLAG_SCRIPT_AUTOEXEC_FAIL) == 0 &&
-        !drop_blend_file_is_autoexec(filepath, true /*skip_overrides*/);
+    bool is_untrusted = false;
+    if (((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) && !G.autoexec_override.has_value()) {
+      if (BKE_autoexec_match(filepath, true, true)) {
+        is_untrusted = true;
+        data->use_scripts = false;
+      }
+    }
 
     ui::Layout &col = layout.column(false);
-
     if (is_untrusted) {
+      col.active_set(false);
       col.enabled_set(false);
-      ui::def_but_boolean(block,
-                          ui::ButtonType::Checkbox,
-                          IFACE_("Trusted Source [Untrusted Path]"),
-                          0,
-                          0,
-                          UI_UNIT_X * 10,
-                          UI_UNIT_Y,
-                          &data->use_scripts,
-                          0,
-                          0,
-                          "");
     }
-    else {
-      ui::def_but_boolean(block,
-                          ui::ButtonType::Checkbox,
-                          IFACE_("Trusted Source"),
-                          0,
-                          0,
-                          UI_UNIT_X * 10,
-                          UI_UNIT_Y,
-                          &data->use_scripts,
-                          0,
-                          0,
-                          TIP_("Allow the .blend file to execute scripts automatically"));
-    }
+
+    /* Simple checkbox bound to the data. */
+    uiDefButBit(block,
+                ui::ButtonType::Checkbox,
+                1,
+                is_untrusted ? IFACE_("Trusted Source [Untrusted Path]") :
+                               IFACE_("Trusted Source"),
+                0,
+                0,
+                0,
+                UI_UNIT_Y,
+                &data->use_scripts,
+                0,
+                0,
+                TIP_("Allow the .blend file to execute scripts automatically"));
   }
 
-  layout.separator(type = ui::SeparatorType::Line);
+  layout.separator();
 
   /* --- Link / Append --- */
   {
-    ui::Layout &col = layout.column(false);
+    ui::Button *but_link = uiDefIconTextBut(block,
+                                            ui::ButtonType::But,
+                                            ICON_LINK_BLEND,
+                                            IFACE_("Link..."),
+                                            0,
+                                            0,
+                                            0,
+                                            UI_UNIT_Y + UI_UNIT_Y / 2,
+                                            nullptr,
+                                            "");
+    button_func_set(but_link, drop_blend_link_cb, block, data);
+    button_drawflag_disable(but_link, ui::BUT_TEXT_LEFT);
 
-    PointerRNA props_ptr;
-
-    ui::def_but_operator(block,
-                         ui::ButtonType::But,
-                         IFACE_("Link..."),
-                         ICON_LINK_BLEND,
-                         0,
-                         0,
-                         UI_UNIT_X * 10,
-                         UI_UNIT_Y,
-                         "WM_OT_link",
-                         WM_OP_INVOKE_DEFAULT,
-                         &props_ptr);
-    RNA_string_set(&props_ptr, "filepath", filepath);
-
-    ui::def_but_operator(block,
-                         ui::ButtonType::But,
-                         IFACE_("Append..."),
-                         ICON_APPEND_BLEND,
-                         0,
-                         0,
-                         UI_UNIT_X * 10,
-                         UI_UNIT_Y,
-                         "WM_OT_append",
-                         WM_OP_INVOKE_DEFAULT,
-                         &props_ptr);
-    RNA_string_set(&props_ptr, "filepath", filepath);
+    ui::Button *but_append = uiDefIconTextBut(block,
+                                              ui::ButtonType::But,
+                                              ICON_APPEND_BLEND,
+                                              IFACE_("Append..."),
+                                              0,
+                                              0,
+                                              0,
+                                              UI_UNIT_Y + UI_UNIT_Y / 2,
+                                              nullptr,
+                                              "");
+    button_func_set(but_append, drop_blend_append_cb, block, data);
+    button_drawflag_disable(but_append, ui::BUT_TEXT_LEFT);
   }
 
   ui::block_bounds_set_centered(block, 14 * UI_SCALE_FAC);
@@ -5553,18 +5587,75 @@ static void drop_blend_file_data_free(void *arg)
  * Show the drop-.blend-file popup (Open / Link / Append).
  * Does nothing if the dialog is already open.
  */
-void wm_drop_blend_file_dialog(bContext *C, const char *filepath)
+static void wm_drop_blend_file_dialog(bContext *C, const char *filepath)
 {
   if (!ui::popup_block_name_exists(CTX_wm_screen(C), drop_blendfile_dialog_name)) {
     auto *data = MEM_new<DropBlendFileData>(__func__);
     STRNCPY(data->filepath, filepath);
 
-    /* Match file selector / Python: default from autoexec rules. */
-    data->use_scripts = drop_blend_file_is_autoexec(filepath, false /*skip_overrides*/);
+    /* Default from auto-execution rules (same logic as wm_open_mainfile_check). */
+    data->use_scripts = true;
+    if (((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) && !G.autoexec_override.has_value()) {
+      if (BKE_autoexec_match(filepath, true, true)) {
+        data->use_scripts = false;
+      }
+    }
 
     ui::popup_block_invoke(C, block_create__drop_blendfile_dialog, data, drop_blend_file_data_free);
   }
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Operator
+ * \{ */
+
+static wmOperatorStatus wm_drop_blend_file_invoke(bContext *C,
+                                                  wmOperator *op,
+                                                  const wmEvent * /*event*/)
+{
+  char filepath[FILE_MAX];
+  RNA_string_get(op->ptr, "filepath", filepath);
+
+  wm_drop_blend_file_dialog(C, filepath);
+
+  return OPERATOR_INTERFACE;
+}
+
+static wmOperatorStatus wm_drop_blend_file_exec(bContext * /*C*/, wmOperator * /*op*/)
+{
+  /* Needed so the popup can draw this operator's UI. */
+  return OPERATOR_CANCELLED;
+}
+
+void WM_OT_drop_blend_file(wmOperatorType *ot)
+{
+  ot->name = "Handle Dropped .blend File";
+  ot->idname = "WM_OT_drop_blend_file";
+  ot->description = "Handle a dropped .blend file (Open, Link or Append)";
+
+  ot->invoke = wm_drop_blend_file_invoke;
+  ot->exec = wm_drop_blend_file_exec;
+
+  ot->flag = OPTYPE_INTERNAL;
+
+  PropertyRNA *prop;
+
+  prop = RNA_def_string_file_path(ot->srna, "filepath", nullptr, FILE_MAX, "File Path", "");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
+  prop = RNA_def_boolean(ot->srna,
+                         "use_scripts",
+                         true,
+                         "Trusted Source",
+                         "Allow .blend file to execute scripts automatically "
+                         "(default taken from system preferences / auto-execution rules)");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  /* Keep for API compatibility with the old Python operator. */
+  wm_open_mainfile_def_property_use_scripts(ot);
+}
+
+/** \} */
 
 /** \} */
 

@@ -4341,54 +4341,6 @@ static void WM_OT_stereo3d_set(wmOperatorType *ot)
 
 /** \} */
 
-/* -------------------------------------------------------------------- */
-/** \name Operator
- * \{ */
-
-static wmOperatorStatus wm_drop_blend_file_invoke(bContext *C,
-                                                  wmOperator *op,
-                                                  const wmEvent * /*event*/)
-{
-  char filepath[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filepath);
-
-  wm_drop_blend_file_dialog(C, filepath);
-
-  return OPERATOR_INTERFACE;
-}
-
-static wmOperatorStatus wm_drop_blend_file_exec(bContext * /*C*/, wmOperator * /*op*/)
-{
-  /* Needed so the popup can draw this operator's UI. */
-  return OPERATOR_CANCELLED;
-}
-
-void WM_OT_drop_blend_file(wmOperatorType *ot)
-{
-  ot->name = "Handle Dropped .blend File";
-  ot->idname = "WM_OT_drop_blend_file";
-  ot->description = "Handle a dropped .blend file (Open, Link or Append)";
-
-  ot->invoke = wm_drop_blend_file_invoke;
-  ot->exec = wm_drop_blend_file_exec;
-
-  ot->flag = OPTYPE_INTERNAL;
-
-  PropertyRNA *prop;
-
-  prop = RNA_def_string_file_path(ot->srna, "filepath", nullptr, FILE_MAX, "File Path", "");
-  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
-
-  prop = RNA_def_boolean(ot->srna,
-                         "use_scripts",
-                         true,
-                         "Trusted Source",
-                         "Allow .blend file to execute scripts automatically "
-                         "(default taken from system preferences / auto-execution rules)");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-}
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Operator Registration & Keymaps
