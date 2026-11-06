@@ -5408,6 +5408,164 @@ bool wm_operator_close_file_dialog_if_needed(bContext *C,
   return false;
 }
 
+static const char *drop_blendfile_dialog_name = "drop_blendfile_dialog";
+
+struct DropBlendFileData {
+  char filepath[FILE_MAX];
+  bool use_scripts;
+};
+
+static bool drop_blend_file_is_autoexec(const char *filepath, const bool skip_overrides)
+{
+  /* Mirrors bpy.path.is_autoexec(..., skip_overrides=..., canonicalize=True, strip_filename=True) */
+  return BLI_path_is_autoexec(filepath, skip_overrides, true /*canonicalize*/, true /*strip_filename*/);
+}
+
+static ui::Block *block_create__drop_blendfile_dialog(bContext *C, ARegion *region, void *arg_v)
+{
+  DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_v);
+  const char *filepath = data->filepath;
+
+  ui::Block *block = ui::block_begin(C, region, drop_blendfile_dialog_name, ui::EmbossType::Emboss);
+  ui::block_flag_enable(block,
+                        ui::BLOCK_KEEP_OPEN | ui::BLOCK_LOOP | ui::BLOCK_NO_WIN_CLIP |
+                            ui::BLOCK_NUMSELECT);
+  ui::block_theme_style_set(block, ui::BLOCK_THEME_STYLE_POPUP);
+
+  ui::Layout &layout = *ui::items_alert_box(block, 28, ui::AlertIcon::Question);
+
+  /* Title / filename. */
+  char filename[FILE_MAX];
+  BLI_path_split_file_part(filepath, filename, sizeof(filename));
+  layout.label(filename, ICON_QUESTION);
+
+  layout.separator();
+
+  /* --- Open button (primary action) --- */
+  {
+    ui::Layout &col = layout.column(false);
+    col.active_default_set(true);
+
+    PointerRNA props_ptr;
+    ui::Button *but = ui::def_but_operator(
+        block,
+        ui::ButtonType::But,
+        IFACE_("Open"),
+        ICON_FILE_FOLDER,
+        0,
+        0,
+        UI_UNIT_X * 10,
+        UI_UNIT_Y,
+        "WM_OT_open_mainfile",
+        WM_OP_INVOKE_DEFAULT,
+        &props_ptr);
+
+    RNA_string_set(&props_ptr, "filepath", filepath);
+    RNA_boolean_set(&props_ptr, "display_file_selector", false);
+    RNA_boolean_set(&props_ptr, "use_scripts", data->use_scripts);
+
+    ui::button_flag_enable(but, UI_BUT_ACTIVE_DEFAULT);
+  }
+
+  /* Trusted Source checkbox. */
+  {
+    const bool is_untrusted =
+        (U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0 &&
+        (G.f & G_FLAG_SCRIPT_AUTOEXEC_FAIL) == 0 &&
+        !drop_blend_file_is_autoexec(filepath, true /*skip_overrides*/);
+
+    ui::Layout &col = layout.column(false);
+
+    if (is_untrusted) {
+      col.enabled_set(false);
+      ui::def_but_boolean(block,
+                          ui::ButtonType::Checkbox,
+                          IFACE_("Trusted Source [Untrusted Path]"),
+                          0,
+                          0,
+                          UI_UNIT_X * 10,
+                          UI_UNIT_Y,
+                          &data->use_scripts,
+                          0,
+                          0,
+                          "");
+    }
+    else {
+      ui::def_but_boolean(block,
+                          ui::ButtonType::Checkbox,
+                          IFACE_("Trusted Source"),
+                          0,
+                          0,
+                          UI_UNIT_X * 10,
+                          UI_UNIT_Y,
+                          &data->use_scripts,
+                          0,
+                          0,
+                          TIP_("Allow the .blend file to execute scripts automatically"));
+    }
+  }
+
+  layout.separator(type = ui::SeparatorType::Line);
+
+  /* --- Link / Append --- */
+  {
+    ui::Layout &col = layout.column(false);
+
+    PointerRNA props_ptr;
+
+    ui::def_but_operator(block,
+                         ui::ButtonType::But,
+                         IFACE_("Link..."),
+                         ICON_LINK_BLEND,
+                         0,
+                         0,
+                         UI_UNIT_X * 10,
+                         UI_UNIT_Y,
+                         "WM_OT_link",
+                         WM_OP_INVOKE_DEFAULT,
+                         &props_ptr);
+    RNA_string_set(&props_ptr, "filepath", filepath);
+
+    ui::def_but_operator(block,
+                         ui::ButtonType::But,
+                         IFACE_("Append..."),
+                         ICON_APPEND_BLEND,
+                         0,
+                         0,
+                         UI_UNIT_X * 10,
+                         UI_UNIT_Y,
+                         "WM_OT_append",
+                         WM_OP_INVOKE_DEFAULT,
+                         &props_ptr);
+    RNA_string_set(&props_ptr, "filepath", filepath);
+  }
+
+  ui::block_bounds_set_centered(block, 14 * UI_SCALE_FAC);
+  return block;
+}
+
+static void drop_blend_file_data_free(void *arg)
+{
+  MEM_delete(static_cast<DropBlendFileData *>(arg));
+}
+
+/**
+ * Show the drop-.blend-file popup (Open / Link / Append).
+ * Does nothing if the dialog is already open.
+ */
+void wm_drop_blend_file_dialog(bContext *C, const char *filepath)
+{
+  if (!ui::popup_block_name_exists(CTX_wm_screen(C), drop_blendfile_dialog_name)) {
+    auto *data = MEM_new<DropBlendFileData>(__func__);
+    STRNCPY(data->filepath, filepath);
+
+    /* Match file selector / Python: default from autoexec rules. */
+    data->use_scripts = drop_blend_file_is_autoexec(filepath, false /*skip_overrides*/);
+
+    ui::popup_block_invoke(C, block_create__drop_blendfile_dialog, data, drop_blend_file_data_free);
+  }
+}
+
 /** \} */
 
 }  // namespace blender
