@@ -5457,21 +5457,48 @@ static void drop_blend_link_cb(bContext *C, void *arg_block, void *arg_data)
 }
 
 static void drop_blend_append_cb(bContext *C, void *arg_block, void *arg_data)
+static void drop_blend_open_cb(bContext *C, void * /*arg_block*/, void *arg_data)
 {
   DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_data);
 
-  PointerRNA props_ptr;
-  WM_operator_properties_create_ptr(&props_ptr, WM_operatortype_find("WM_OT_append", false));
-  RNA_string_set(&props_ptr, "filepath", data->filepath);
+  wmOperatorType *ot = WM_operatortype_find("WM_OT_open_mainfile", false);
+  PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
 
-  WM_operator_name_call_ptr(C,
-                            WM_operatortype_find("WM_OT_append", false),
-                            wm::OpCallContext::InvokeDefault,
-                            &props_ptr,
-                            nullptr);
+  RNA_string_set(&props_ptr, "filepath", data->filepath);
+  RNA_boolean_set(&props_ptr, "display_file_selector", false);
+  RNA_boolean_set(&props_ptr, "use_scripts", data->use_scripts);
+
+  WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
 
   WM_operator_properties_free(&props_ptr);
-  ui::popup_block_close(C, static_cast<ui::Block *>(arg_block));
+}
+
+static void drop_blend_link_cb(bContext *C, void * /*arg_block*/, void *arg_data)
+{
+  DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_data);
+
+  wmOperatorType *ot = WM_operatortype_find("WM_OT_link", false);
+  PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
+
+  RNA_string_set(&props_ptr, "filepath", data->filepath);
+
+  WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
+
+  WM_operator_properties_free(&props_ptr);
+}
+
+static void drop_blend_append_cb(bContext *C, void * /*arg_block*/, void *arg_data)
+{
+  DropBlendFileData *data = static_cast<DropBlendFileData *>(arg_data);
+
+  wmOperatorType *ot = WM_operatortype_find("WM_OT_append", false);
+  PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
+
+  RNA_string_set(&props_ptr, "filepath", data->filepath);
+
+  WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
+
+  WM_operator_properties_free(&props_ptr);
 }
 
 static ui::Block *block_create__drop_blendfile_dialog(bContext *C, ARegion *region, void *arg_v)
@@ -5489,7 +5516,7 @@ static ui::Block *block_create__drop_blendfile_dialog(bContext *C, ARegion *regi
 
   /* Filename. */
   char filename[FILE_MAX];
-  BLI_path_split_file_part(filepath, filename, sizeof(filename));
+  BLI_path_split_file_part(filepath, filename);
   layout.label(filename, ICON_QUESTION);
 
   layout.separator();
