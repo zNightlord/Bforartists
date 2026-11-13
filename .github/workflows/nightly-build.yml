@@ -15,12 +15,19 @@ on:
         required: true
         type: string
 
+      ref:
+        required: false
+        type: string
+        default: ""
+
 jobs:
   build:
     runs-on: ${{ inputs.os }}
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref }}   # empty string = default checkout behaviour
 
     - name: Use Python 3.13
       uses: actions/setup-python@v4
