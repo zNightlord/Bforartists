@@ -695,6 +695,8 @@ static wmOperatorStatus compositor_modifier_open_editor_exec(bContext *C, wmOper
     return OPERATOR_CANCELLED;
   }
 
+  seq::modifier_set_active(strip, smd); /* so header context resolves */
+
   SequencerCompositorModifierData *cmd = reinterpret_cast<SequencerCompositorModifierData *>(smd);
   /* BFA - mark modifier active so the node editor header context resolves */
   seq::modifier_set_active(strip, smd);
