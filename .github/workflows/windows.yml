@@ -1,14 +1,38 @@
 name: Windows
+
 on:
-  push:
-      branches: [ "master" ]
-  pull_request:
-      branches: [ "master" ]
+  issue_comment:
+    types: [created]
 
 jobs:
+  # Step 1: Resolve the PR's actual branch/commit SHA
+  prepare:
+    if: >
+      github.event.issue.pull_request &&
+      trim(github.event.comment.body) == 'build' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+    steps:
+      - name: Get PR Head SHA
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            core.setOutput('head_sha', pr.data.head.sha);
+
+  # Step 2: Pass that SHA into your reusable build workflow
   build:
+    needs: prepare
     uses: ./.github/workflows/nightly-build.yml
     with:
       os: "windows-latest"
       c_compiler: "cl"
       cpp_compiler: "cl"
+      ref: ${{ needs.prepare.outputs.head_sha }}
