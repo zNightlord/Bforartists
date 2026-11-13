@@ -9,7 +9,7 @@ jobs:
   prepare:
     if: >
       github.event.issue.pull_request &&
-      trim(github.event.comment.body) == 'build' &&
+      (github.event.comment.body == 'build' || github.event.comment.body == '/build') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     outputs:
