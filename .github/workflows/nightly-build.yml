@@ -6,16 +6,25 @@ on:
       os:
         required: true
         type: string
-
       c_compiler:
         required: true
         type: string
-
       cpp_compiler:
         required: true
         type: string
-
       ref:
+        required: false
+        type: string
+        default: ""
+      upload:
+        required: false
+        type: boolean
+        default: true
+      minimal:
+        required: false
+        type: boolean
+        default: false
+      artifact_suffix:
         required: false
         type: string
         default: ""
@@ -23,13 +32,17 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.os }}
+    timeout-minutes: 360
 
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ inputs.ref }}   # empty string = default checkout behaviour
+        ref: ${{ inputs.ref }}
 
+    # Windows full build uses the runner's default Python (as in the original).
+    # Minimal build uses plain CMake, so it sets up Python 3.13 like the old shared file.
     - name: Use Python 3.13
+      if: ${{ runner.os != 'Windows' || inputs.minimal }}
       uses: actions/setup-python@v4
       with:
         python-version: "3.13"
@@ -42,37 +55,73 @@ jobs:
         echo "build-type=Release" >> "$GITHUB_OUTPUT"
 
     - name: Install deps and download libraries (Ubuntu)
+      if: ${{ runner.os == 'Linux' }}
       working-directory: ${{ github.workspace }}
-      if: ${{ inputs.os == 'ubuntu-latest' }}
-      run: |
-        python ./build_files/linux/install_linux_packages.py
+      run: python ./build_files/linux/install_linux_packages.py
+
+    # Safeguard so `make ninja` always finds ninja. Remove if your runners already have it.
+    - name: Install ninja
+      run: python -m pip install ninja
 
     - name: Run make update
       working-directory: ${{ github.workspace }}
       run: python ./build_files/utils/make_update.py
 
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: >
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ inputs.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ inputs.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ steps.strings.outputs.build-type }}
-        -S ${{ github.workspace }}
+    # ---------------- Windows ----------------
+    - name: Build (Windows)
+      if: ${{ runner.os == 'Windows' && !inputs.minimal }}
+      shell: cmd
+      run: make ninja
 
-    - name: Build
-      # Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ steps.strings.outputs.build-type }}
-
-    # - name: Test
-    #   working-directory: ${{ steps.strings.outputs.build-output-dir }}
-    #   # Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-    #   # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-    #   run: ctest --build-config ${{ steps.strings.outputs.build-type }}
-
-    - name: Upload Build
+    - name: Upload Build (Windows)
+      if: ${{ runner.os == 'Windows' && !inputs.minimal && inputs.upload }}
       uses: actions/upload-artifact@v4
       with:
-        name: Bforartists-Nightly-${{ runner.os }}-${{ runner.arch }}
-        path: ${{ steps.strings.outputs.build-output-dir }}/bin/
+        name: Blender-Release-${{ runner.os }}${{ inputs.artifact_suffix }}
+        path: D:/a/Bforartists/*/bin
+        retention-days: 14
+
+    # ---------------- Linux ----------------
+    - name: Build (Linux)
+      if: ${{ runner.os == 'Linux' && !inputs.minimal }}
+      run: make ninja
+
+    - name: Upload Build (Linux)
+      if: ${{ runner.os == 'Linux' && !inputs.minimal && inputs.upload }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: Bforartists-Nightly-${{ runner.os }}-${{ runner.arch }}${{ inputs.artifact_suffix }}
+        path: ${{ github.workspace }}/../build_linux/bin
+        retention-days: 14
+
+    # ---------------- MacOS ----------------
+    - name: Build (macOS)
+      if: ${{ runner.os == 'macOS' && !inputs.minimal }}
+      run: make ninja
+
+    - name: Upload Build (macOS)
+      if: ${{ runner.os == 'macOS' && !inputs.minimal && inputs.upload }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: Blender-Release-${{ runner.os }}${{ inputs.artifact_suffix }}
+        path: ${{ github.workspace }}/../build_darwin/bin
+        retention-days: 14
+
+    # ---------------- Minimal (Windows only, plain CMake + Ninja) ----------------
+    - name: Configure CMake (minimal)
+      if: ${{ inputs.minimal }}
+      shell: cmd
+      run: |
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        cmake -G Ninja -B "${{ steps.strings.outputs.build-output-dir }}" ^
+          -DCMAKE_CXX_COMPILER=${{ inputs.cpp_compiler }} ^
+          -DCMAKE_C_COMPILER=${{ inputs.c_compiler }} ^
+          -DCMAKE_BUILD_TYPE=${{ steps.strings.outputs.build-type }} ^
+          -S "${{ github.workspace }}"
+
+    - name: Build (minimal)
+      if: ${{ inputs.minimal }}
+      shell: cmd
+      run: |
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        cmake --build "${{ steps.strings.outputs.build-output-dir }}"
