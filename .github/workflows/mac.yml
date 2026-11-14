@@ -12,6 +12,10 @@ on:
         type: string
         required: false
         default: "true"
+      lite:
+        type: string
+        required: false
+        default: "false"
       artifact_suffix:
         type: string
         required: false
@@ -29,4 +33,5 @@ jobs:
       cpp_compiler: "clang++"
       ref: ${{ inputs.ref }}
       upload: ${{ inputs.upload != 'false' }}
+      lite: ${{ inputs.lite == 'true' }}
       artifact_suffix: ${{ inputs.artifact_suffix }}
