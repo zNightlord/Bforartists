@@ -93,7 +93,7 @@ jobs:
   build-macos:
     needs: gate
     if: needs.gate.outputs.valid == 'true' && needs.gate.outputs.macos == 'true'
-    uses: ./.github/workflows/macos.yml
+    uses: ./.github/workflows/mac.yml
     with:
       ref: ${{ needs.gate.outputs.sha }}
       upload: ${{ needs.gate.outputs.upload }}
