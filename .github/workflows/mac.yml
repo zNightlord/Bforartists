@@ -24,7 +24,7 @@ jobs:
   build:
     uses: ./.github/workflows/nightly-build.yml
     with:
-      os: "macos-14"
+      os: "macos-15"
       c_compiler: "clang"
       cpp_compiler: "clang++"
       ref: ${{ inputs.ref }}
