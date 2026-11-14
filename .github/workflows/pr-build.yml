@@ -25,28 +25,34 @@ jobs:
       linux:   ${{ steps.parse.outputs.linux }}
       macos:   ${{ steps.parse.outputs.macos }}
       minimal: ${{ steps.parse.outputs.minimal }}
+      lite:    ${{ steps.parse.outputs.lite }}
       upload:  ${{ steps.parse.outputs.upload }}
     steps:
       - id: parse
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
             const body = context.payload.comment.body.trim();
-            // "build <platform|all> [upload]"  or  "build minimal" (no upload)
-            const m = body.match(/^build\s+(?:(windows|linux|macos|all)(\s+upload)?|(minimal))$/i);
-            if (!m) {
+
+            // "build minimal" (Windows only, no lite/upload)
+            const isMinimal = /^build\s+minimal$/i.test(body);
+            // "build [windows|linux|macos|all] [lite] [upload]"; needs a platform or "lite"
+            const m = body.match(/^build(?:\s+(windows|linux|macos|all))?(\s+lite)?(\s+upload)?$/i);
+
+            if (!isMinimal && (!m || (!m[1] && !m[2]))) {
               core.setOutput('valid', 'false');
               return;
             }
-            const target  = (m[1] || '').toLowerCase();
-            const upload  = !!m[2];
-            const minimal = !!m[3];
+
+            const target = isMinimal ? '' : (m[1] ? m[1].toLowerCase() : 'all');
+            const lite   = !isMinimal && !!m[2];
+            const upload = !isMinimal && !!m[3];
             const want = (p) => target === 'all' || target === p;
             const selected = {
               windows: want('windows'),
               linux:   want('linux'),
               macos:   want('macos'),
-              minimal: minimal,
+              minimal: isMinimal,
             };
 
             const { owner, repo } = context.repo;
@@ -57,6 +63,7 @@ jobs:
             core.setOutput('valid', 'true');
             core.setOutput('sha', pr.head.sha);
             core.setOutput('upload', String(upload));
+            core.setOutput('lite', String(lite));
 
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             for (const [p, on] of Object.entries(selected)) {
@@ -67,7 +74,7 @@ jobs:
                 sha: pr.head.sha,
                 state: 'pending',
                 context: `Build ${p}`,
-                description: upload ? 'Building + upload' : 'Building',
+                description: `Building${lite ? ' (lite)' : ''}${upload ? ' + upload' : ''}`,
                 target_url: runUrl,
               });
             }
@@ -79,7 +86,8 @@ jobs:
     with:
       ref: ${{ needs.gate.outputs.sha }}
       upload: ${{ needs.gate.outputs.upload }}
-      artifact_suffix: "-PR${{ github.event.issue.number }}"
+      lite: ${{ needs.gate.outputs.lite }}
+      artifact_suffix: "${{ needs.gate.outputs.lite == 'true' && '-lite' || '' }}-PR${{ github.event.issue.number }}"
 
   build-linux:
     needs: gate
@@ -88,16 +96,18 @@ jobs:
     with:
       ref: ${{ needs.gate.outputs.sha }}
       upload: ${{ needs.gate.outputs.upload }}
-      artifact_suffix: "-PR${{ github.event.issue.number }}"
+      lite: ${{ needs.gate.outputs.lite }}
+      artifact_suffix: "${{ needs.gate.outputs.lite == 'true' && '-lite' || '' }}-PR${{ github.event.issue.number }}"
 
   build-macos:
     needs: gate
     if: needs.gate.outputs.valid == 'true' && needs.gate.outputs.macos == 'true'
-    uses: ./.github/workflows/mac.yml
+    uses: ./.github/workflows/macos.yml
     with:
       ref: ${{ needs.gate.outputs.sha }}
       upload: ${{ needs.gate.outputs.upload }}
-      artifact_suffix: "-PR${{ github.event.issue.number }}"
+      lite: ${{ needs.gate.outputs.lite }}
+      artifact_suffix: "${{ needs.gate.outputs.lite == 'true' && '-lite' || '' }}-PR${{ github.event.issue.number }}"
 
   build-minimal:
     needs: gate
@@ -117,7 +127,7 @@ jobs:
       pull-requests: write
       actions: read
     steps:
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v7
         env:
           NEEDS: ${{ toJSON(needs) }}
         with:
@@ -127,6 +137,7 @@ jobs:
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const sha = needs.gate.outputs.sha;
             const upload = needs.gate.outputs.upload === 'true';
+            const lite = needs.gate.outputs.lite === 'true';
             const suffix = `-PR${context.issue.number}`;
 
             let artifacts = [];
@@ -158,7 +169,7 @@ jobs:
                   ? `[${art.name}](${runUrl}/artifacts/${art.id})`
                   : (upload && ok ? 'artifact not found' : '-');
               }
-              const label = p === 'minimal' ? 'windows (minimal)' : p;
+              const label = p === 'minimal' ? 'windows (minimal)' : (lite ? `${p} (lite)` : p);
               rows.push(`| ${label} | ${ok ? '✅ passed' : '❌ ' + result} | ${dl} |`);
             }
 
@@ -172,9 +183,6 @@ jobs:
               ...rows,
               '',
               `[Workflow run](${runUrl})`,
-              (!upload && anyUploadable)
-                ? '_Built without upload. Comment `build <platform> upload` to get a download._'
-                : '',
             ].join('\n');
 
             await github.rest.issues.createComment({
