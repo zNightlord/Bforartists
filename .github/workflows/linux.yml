@@ -1,14 +1,32 @@
 name: Linux
+
 on:
-  push:
-      branches: [ "master" ]
-  pull_request:
-      branches: [ "master" ]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+      upload:
+        type: string
+        required: false
+        default: "true"
+      artifact_suffix:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
 
 jobs:
   build:
     uses: ./.github/workflows/nightly-build.yml
     with:
       os: "ubuntu-latest"
-      c_compiler: "gcc-14"
-      cpp_compiler: "g++-14"
+      c_compiler: "gcc"
+      cpp_compiler: "g++"
+      ref: ${{ inputs.ref }}
+      upload: ${{ inputs.upload != 'false' }}
+      artifact_suffix: ${{ inputs.artifact_suffix }}
