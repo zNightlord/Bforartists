@@ -12,6 +12,10 @@ on:
         type: string
         required: false
         default: "true"
+      lite:
+        type: string
+        required: false
+        default: "false"
       minimal:
         type: string
         required: false
@@ -33,5 +37,6 @@ jobs:
       cpp_compiler: "cl"
       ref: ${{ inputs.ref }}
       upload: ${{ inputs.upload != 'false' }}
+      lite: ${{ inputs.lite == 'true' }}
       minimal: ${{ inputs.minimal == 'true' }}
       artifact_suffix: ${{ inputs.artifact_suffix }}
