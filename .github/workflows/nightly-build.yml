@@ -24,6 +24,10 @@ on:
         required: false
         type: boolean
         default: false
+      lite:
+        required: false
+        type: boolean
+        default: false
       artifact_suffix:
         required: false
         type: string
@@ -71,40 +75,40 @@ jobs:
     - name: Build (Windows)
       if: ${{ runner.os == 'Windows' && !inputs.minimal }}
       shell: cmd
-      run: make ninja
+      run: make ${{ inputs.lite && 'lite ' || '' }}ninja
 
     - name: Upload Build (Windows)
       if: ${{ runner.os == 'Windows' && !inputs.minimal && inputs.upload }}
       uses: actions/upload-artifact@v4
       with:
-        name: Blender-Release-${{ runner.os }}${{ inputs.artifact_suffix }}
-        path: D:/a/Bforartists/*/bin
+        name: Bforartists-Nightly-${{ runner.os }}${{ inputs.artifact_suffix }}
+        path: ${{ github.workspace }}/../*/bin
         retention-days: 14
 
     # ---------------- Linux ----------------
     - name: Build (Linux)
       if: ${{ runner.os == 'Linux' && !inputs.minimal }}
-      run: make ninja
+      run: make ${{ inputs.lite && 'lite ' || '' }}ninja
 
     - name: Upload Build (Linux)
       if: ${{ runner.os == 'Linux' && !inputs.minimal && inputs.upload }}
       uses: actions/upload-artifact@v4
       with:
         name: Bforartists-Nightly-${{ runner.os }}-${{ runner.arch }}${{ inputs.artifact_suffix }}
-        path: ${{ github.workspace }}/../build_linux/bin
+        path: ${{ github.workspace }}/../*/bin
         retention-days: 14
 
     # ---------------- MacOS ----------------
     - name: Build (macOS)
       if: ${{ runner.os == 'macOS' && !inputs.minimal }}
-      run: make ninja
+      run: make ${{ inputs.lite && 'lite ' || '' }}ninja
 
     - name: Upload Build (macOS)
       if: ${{ runner.os == 'macOS' && !inputs.minimal && inputs.upload }}
       uses: actions/upload-artifact@v4
       with:
         name: Blender-Release-${{ runner.os }}${{ inputs.artifact_suffix }}
-        path: ${{ github.workspace }}/../build_darwin/bin
+        path: ${{ github.workspace }}/../*/bin
         retention-days: 14
 
     # ---------------- Minimal (Windows only, plain CMake + Ninja) ----------------
@@ -114,6 +118,7 @@ jobs:
       run: |
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         cmake -G Ninja -B "${{ steps.strings.outputs.build-output-dir }}" ^
+          -C "${{ github.workspace }}/build_files/cmake/config/blender_lite.cmake" ^
           -DCMAKE_CXX_COMPILER=${{ inputs.cpp_compiler }} ^
           -DCMAKE_C_COMPILER=${{ inputs.c_compiler }} ^
           -DCMAKE_BUILD_TYPE=${{ steps.strings.outputs.build-type }} ^
