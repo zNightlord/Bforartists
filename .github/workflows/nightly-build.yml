@@ -58,10 +58,19 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
         echo "build-type=Release" >> "$GITHUB_OUTPUT"
 
-    - name: Install deps and download libraries (Ubuntu)
+    - name: Install deps and download libraries (Linux)
       if: ${{ runner.os == 'Linux' }}
       working-directory: ${{ github.workspace }}
       run: python ./build_files/linux/install_linux_packages.py
+
+    - name: Use GCC 14 (Linux)
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-14 g++-14
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 \
+          --slave /usr/bin/g++ g++ /usr/bin/g++-14
+        gcc --version
 
     # Safeguard so `make ninja` always finds ninja. Remove if your runners already have it.
     - name: Install ninja
@@ -81,8 +90,8 @@ jobs:
       if: ${{ runner.os == 'Windows' && !inputs.minimal && inputs.upload }}
       uses: actions/upload-artifact@v4
       with:
-        name: Bforartists-Nightly-${{ runner.os }}${{ inputs.artifact_suffix }}
-        path: ${{ github.workspace }}/../*/bin
+        name: Blender-Release-${{ runner.os }}${{ inputs.artifact_suffix }}
+        path: ${{ runner.workspace }}/bfa_build_*/bin
         retention-days: 14
 
     # ---------------- Linux ----------------
@@ -95,7 +104,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Bforartists-Nightly-${{ runner.os }}-${{ runner.arch }}${{ inputs.artifact_suffix }}
-        path: ${{ github.workspace }}/../*/bin
+        path: ${{ runner.workspace }}/bfa_build_*/bin
         retention-days: 14
 
     # ---------------- MacOS ----------------
@@ -108,7 +117,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Blender-Release-${{ runner.os }}${{ inputs.artifact_suffix }}
-        path: ${{ github.workspace }}/../*/bin
+        path: ${{ runner.workspace }}/bfa_build_*/bin
         retention-days: 14
 
     # ---------------- Minimal (Windows only, plain CMake + Ninja) ----------------
