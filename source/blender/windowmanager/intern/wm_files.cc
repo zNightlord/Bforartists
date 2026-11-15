@@ -546,6 +546,7 @@ static void wm_init_userdef(Main *bmain)
   const int64_t cache_limit = int64_t(U.memcachelimit) * 1024 * 1024;
   MEM_CacheLimiter_set_maximum(cache_limit);
   memory_cache::set_approximate_size_limit(cache_limit);
+  IMB_pixel_pool_set_limit(size_t(cache_limit / 6));
 
   BKE_sound_init(bmain);
 
@@ -707,6 +708,10 @@ static void wm_file_read_post(bContext *C,
   bool addons_loaded = false;
 
   if (use_data) {
+    /* At this point old file and any ImBufs from that is already cleared;
+     * we can clear the ImBuf pixel pool storage. */
+    IMB_pixel_pool_clear();
+
     if (!G.background) {
       /* Remove windows which failed to be added via #WM_check. */
       wm_window_ghostwindows_remove_invalid(C, wm);
@@ -1210,7 +1215,7 @@ static struct {
 void WM_init_state_app_template_set(const char *app_template)
 {
   if (app_template) {
-    STRNCPY(wm_init_state_app_template.app_template, app_template);
+    STRNCPY_UTF8(wm_init_state_app_template.app_template, app_template);
     wm_init_state_app_template.override = true;
   }
   else {
@@ -1543,7 +1548,7 @@ void wm_homefile_read_ex(bContext *C,
   }
 
   if (app_template_override) {
-    STRNCPY(U.app_template, app_template_override);
+    STRNCPY_UTF8(U.app_template, app_template_override);
   }
 
   if (use_userdef) {
@@ -1988,7 +1993,7 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
   if (ibuf) {
     /* Save metadata for quick access. */
     char version_str[10];
-    SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
+    SNPRINTF_UTF8(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
     IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
   }
 
@@ -2094,7 +2099,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
 
     /* Save metadata for quick access. */
     char version_str[10];
-    SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
+    SNPRINTF_UTF8(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
     IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
 
     /* BLEN_THUMB_SIZE is size of thumbnail inside blend file: 128x128. */
@@ -4804,12 +4809,12 @@ static void file_overwrite_detailed_info_show(ui::Layout &parent_layout, Main *b
 
     char message_line1[256];
     char message_line2[256];
-    SNPRINTF(message_line1,
-             RPT_("This file was saved by a newer version of Blender (%s)."),
-             writer_ver_str);
-    SNPRINTF(message_line2,
-             RPT_("Saving it with this Blender (%s) may cause loss of data."),
-             current_ver_str);
+    SNPRINTF_UTF8(message_line1,
+                  RPT_("This file was saved by a newer version of Blender (%s)."),
+                  writer_ver_str);
+    SNPRINTF_UTF8(message_line2,
+                  RPT_("Saving it with this Blender (%s) may cause loss of data."),
+                  current_ver_str);
     layout.label(message_line1, ICON_NONE);
     layout.label(message_line2, ICON_NONE);
   }

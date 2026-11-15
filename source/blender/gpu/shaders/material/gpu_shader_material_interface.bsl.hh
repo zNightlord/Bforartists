@@ -145,6 +145,10 @@ Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureDiffus
 {
   return {};
 }
+Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureOrenNayar /*oren_nayar*/)
+{
+  return {};
+}
 Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureSubsurface /*diffuse*/)
 {
   return {};
@@ -236,12 +240,7 @@ Closure closure_eval(KernelGlobals & /*kg*/,
 {
   return {};
 }
-Closure closure_eval(KernelGlobals & /*kg*/,
-                     ShadingData & /*sd*/,
-                     ClosureDiffuse /*diffuse*/,
-                     ClosureReflection /*reflection*/,
-                     ClosureReflection /*coat*/,
-                     ClosureRefraction /*refraction*/)
+Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureSheen /*sheen*/)
 {
   return {};
 }
@@ -301,6 +300,21 @@ float3 brdf_lut(KernelGlobals & /*kg*/,
                 bool /*do_multiscatter*/)
 {
   return float3(0.0f);
+}
+
+float3 oren_nayar_lut(const KernelGlobals & /*kg*/,
+                      const float3 /*color*/,
+                      const float /*cos_theta*/,
+                      const float /*roughness*/)
+{
+  return float3(0.0f);
+}
+
+float sheen_albedo(const KernelGlobals & /*kg*/,
+                   const float /*cos_theta*/,
+                   const float /*roughness*/)
+{
+  return 0.0f;
 }
 
 float f0_from_ior(float /*eta*/)

@@ -370,15 +370,21 @@ static void update_sequencer(const DEGEditorUpdateContext *update_ctx, Main *bma
   const uint ignored = ID_RECALC_SELECT | ID_RECALC_FRAME_CHANGE | ID_RECALC_AUDIO_FPS |
                        ID_RECALC_AUDIO_VOLUME | ID_RECALC_AUDIO_MUTE | ID_RECALC_AUDIO_LISTENER |
                        ID_RECALC_AUDIO;
-  if ((id->recalc & ~ignored) == 0) {
+  /* Only the evaluated ID has recalc flags of changes flushed from dependencies, so use it here.
+   * The checks below use the original ID, for direct changes and lookups of original data. */
+  const ID *id_eval = DEG_get_evaluated_id(update_ctx->depsgraph, id);
+  if ((id_eval->recalc & ~ignored) == 0) {
     return;
   }
   Scene *changed_scene = update_ctx->scene;
 
-  /* Changed datablocks invalidate camera-input scene strips.
-   * Changed strips invalidate sequencer-input scene strips. */
-  if (id->id_type() != ID_SCE || id->recalc & ID_RECALC_SEQUENCER_STRIPS) {
+  /* Changed datablocks invalidate camera-input scene strips. */
+  if (id->id_type() != ID_SCE) {
     seq::relations_invalidate_scene_strips(bmain, changed_scene);
+  }
+  /* Changed strips invalidate sequencer-input scene strips. */
+  else if (id->recalc & ID_RECALC_SEQUENCER_STRIPS) {
+    seq::relations_invalidate_scene_strips(bmain, id_cast<Scene *>(id));
   }
 
   /* Invalidate rendered VSE caches in `changed_scene`, because strip animation may have been

@@ -273,6 +273,7 @@ static void do_color_smooth_task(const Depsgraph &depsgraph,
                                  const GroupedSpan<int> vert_to_face_map,
                                  const MeshAttributeData &attribute_data,
                                  const Brush &brush,
+                                 const float4x4 &mat,
                                  const bke::pbvh::MeshNode &node,
                                  ColorPaintLocalData &tls,
                                  bke::GSpanAttributeWriter &color_attribute)
@@ -285,15 +286,31 @@ static void do_color_smooth_task(const Depsgraph &depsgraph,
   tls.opacity_factors.resize(verts.size());
   const MutableSpan<float> factors = tls.opacity_factors;
   tls.distances.resize(verts.size());
-  calc_factors_common_mesh_indexed(depsgraph,
-                                   brush,
-                                   object,
-                                   attribute_data,
-                                   vert_positions,
-                                   vert_normals,
-                                   node,
-                                   factors,
-                                   tls.distances);
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.positions.resize(verts.size());
+    calc_cube_tip_factors_common_mesh_indexed(depsgraph,
+                                              brush,
+                                              object,
+                                              mat,
+                                              attribute_data,
+                                              vert_positions,
+                                              vert_normals,
+                                              tls.positions,
+                                              node,
+                                              factors,
+                                              tls.distances);
+  }
+  else {
+    calc_factors_common_mesh_indexed(depsgraph,
+                                     brush,
+                                     object,
+                                     attribute_data,
+                                     vert_positions,
+                                     vert_normals,
+                                     node,
+                                     factors,
+                                     tls.distances);
+  }
   scale_factors(factors, cache.bstrength);
 
   tls.colors.resize(verts.size());
@@ -598,10 +615,6 @@ void do_paint_brush(const Depsgraph &depsgraph,
     ss.cache->paint_brush.density_seed = BLI_hash_int_01(ss.cache->location_symm[0] * 1000);
   }
 
-  if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
-    return;
-  }
-
   float4x4 mat;
 
   /* If the brush is round the tip does not need to be aligned to the surface, so this saves a
@@ -716,6 +729,7 @@ static void do_smear_brush_task(const Depsgraph &depsgraph,
                                 const GroupedSpan<int> vert_to_face_map,
                                 const MeshAttributeData &attribute_data,
                                 const Brush &brush,
+                                const float4x4 &mat,
                                 bke::pbvh::MeshNode &node,
                                 ColorPaintLocalData &tls,
                                 bke::GSpanAttributeWriter &color_attribute)
@@ -728,15 +742,31 @@ static void do_smear_brush_task(const Depsgraph &depsgraph,
   tls.opacity_factors.resize(verts.size());
   const MutableSpan<float> factors = tls.opacity_factors;
   tls.distances.resize(verts.size());
-  calc_factors_common_mesh_indexed(depsgraph,
-                                   brush,
-                                   object,
-                                   attribute_data,
-                                   vert_positions,
-                                   vert_normals,
-                                   node,
-                                   factors,
-                                   tls.distances);
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
+    tls.positions.resize(verts.size());
+    calc_cube_tip_factors_common_mesh_indexed(depsgraph,
+                                              brush,
+                                              object,
+                                              mat,
+                                              attribute_data,
+                                              vert_positions,
+                                              vert_normals,
+                                              tls.positions,
+                                              node,
+                                              factors,
+                                              tls.distances);
+  }
+  else {
+    calc_factors_common_mesh_indexed(depsgraph,
+                                     brush,
+                                     object,
+                                     attribute_data,
+                                     vert_positions,
+                                     vert_normals,
+                                     node,
+                                     factors,
+                                     tls.distances);
+  }
   scale_factors(factors, strength);
 
   float3 brush_delta;
@@ -915,6 +945,8 @@ void do_smear_brush(const Depsgraph &depsgraph,
         }
       },
       exec_mode::grain_size(1));
+  const float4x4 mat = cube_tip_init(ob, brush);
+
   threading::EnumerableThreadSpecific<ColorPaintLocalData> all_tls;
   node_mask.foreach_index(
       [&](const int i) {
@@ -928,6 +960,7 @@ void do_smear_brush(const Depsgraph &depsgraph,
                             vert_to_face_map,
                             attribute_data,
                             brush,
+                            mat,
                             nodes[i],
                             tls,
                             color_attribute);
@@ -953,10 +986,6 @@ void do_blur_brush(const Depsgraph &depsgraph,
     ss.cache->paint_brush.density_seed = BLI_hash_int_01(ss.cache->location_symm[0] * 1000);
   }
 
-  if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
-    return;
-  }
-
   Mesh &mesh = *id_cast<Mesh *>(ob.data);
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
   const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, ob);
@@ -968,6 +997,8 @@ void do_blur_brush(const Depsgraph &depsgraph,
   if (!color_attribute) {
     return;
   }
+
+  const float4x4 mat = cube_tip_init(ob, brush);
 
   threading::EnumerableThreadSpecific<ColorPaintLocalData> all_tls;
   node_mask.foreach_index(
@@ -982,6 +1013,7 @@ void do_blur_brush(const Depsgraph &depsgraph,
                              vert_to_face_map,
                              attribute_data,
                              brush,
+                             mat,
                              nodes[i],
                              tls,
                              color_attribute);

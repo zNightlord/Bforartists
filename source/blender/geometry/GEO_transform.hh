@@ -34,5 +34,11 @@ std::optional<TransformGeometryErrors> transform_geometry(bke::GeometrySet &geom
 
 void translate_geometry(bke::GeometrySet &geometry, const float3 translation);
 
+/**
+ * This is similar to #translate_geometry but only translates point and instance positions. It does
+ * not affect volumes, layer transforms etc.
+ */
+void translate_points_and_instances(bke::GeometrySet &geometry, const float3 translation);
+
 }  // namespace geometry
 }  // namespace blender

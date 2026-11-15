@@ -183,6 +183,8 @@ class NODE_MT_gn_grease_pencil_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeGreasePencilOpacity")
         self.node_operator(layout, "GeometryNodeGreasePencilStrokeSoftness")
         self.node_operator(layout, "GeometryNodeGreasePencilStrokeVisibility")
+        layout.separator()
+        self.node_operator(layout, "GeometryNodeGreasePencilMaterialInfo")
         self.node_operator(layout, "GeometryNodeInputNamedLayerSelection")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
@@ -410,6 +412,7 @@ class NODE_MT_gn_input_scene_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeObjectInfo")
         self.node_operator_with_outputs(context, layout, "GeometryNodeInputSceneTime", ["Frame", "Seconds"])
         self.node_operator(layout, "GeometryNodeSelfObject")
+        self.node_operator(layout, "GeometryNodeShapeKeyInfo")
         if context.space_data.node_tree_sub_type == 'TOOL':
             self.node_operator_with_outputs(
                 context, layout, "GeometryNodeViewportTransform",

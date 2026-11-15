@@ -118,6 +118,7 @@ set(SRC
   nodes/node_geo_grease_pencil_draw_time.cc
   nodes/node_geo_grease_pencil_fill_id.cc
   nodes/node_geo_grease_pencil_opacity.cc
+  nodes/node_geo_grease_pencil_material_info.cc
   nodes/node_geo_grease_pencil_stroke_softness.cc
   nodes/node_geo_grease_pencil_stroke_visibility.cc
   nodes/node_geo_grease_pencil_to_curves.cc
@@ -287,6 +288,7 @@ set(SRC
   nodes/node_geo_set_shade_smooth.cc
   nodes/node_geo_set_spline_cyclic.cc
   nodes/node_geo_set_spline_resolution.cc
+  nodes/node_geo_shape_key_info.cc
   nodes/node_geo_simulation.cc
   nodes/node_geo_sort_elements.cc
   nodes/node_geo_sort_list.cc

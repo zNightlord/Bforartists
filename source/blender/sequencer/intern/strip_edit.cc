@@ -99,7 +99,8 @@ bool edit_strip_swap(Scene *scene, Strip *strip_a, Strip *strip_b, const char **
   return true;
 }
 
-static void strip_update_muting_recursive(ListBaseT<SeqTimelineChannel> *channels,
+static void strip_update_muting_recursive(const Scene *scene,
+                                          ListBaseT<SeqTimelineChannel> *channels,
                                           ListBaseT<Strip> *seqbasep,
                                           Strip *strip_meta,
                                           const bool mute)
@@ -116,27 +117,29 @@ static void strip_update_muting_recursive(ListBaseT<SeqTimelineChannel> *channel
         strip_mute = false;
       }
 
-      strip_update_muting_recursive(&strip.channels, &strip.seqbase, strip_meta, strip_mute);
+      strip_update_muting_recursive(
+          scene, &strip.channels, &strip.seqbase, strip_meta, strip_mute);
     }
     else if (ELEM(strip.type, STRIP_TYPE_SOUND, STRIP_TYPE_SCENE)) {
       if (strip.runtime->scene_sound) {
-        BKE_sound_mute_scene_sound(strip.runtime->scene_sound, strip_mute);
+        BKE_sound_mute_scene_sound(scene, strip.runtime->scene_sound, strip_mute);
       }
     }
   }
 }
 
-void edit_update_muting(Editing *ed)
+void edit_update_muting(const Scene *scene)
 {
+  Editing *ed = scene->ed;
   if (ed) {
     /* mute all sounds up to current metastack list */
     MetaStack *ms = ed->metastack.last();
 
     if (ms) {
-      strip_update_muting_recursive(&ed->channels, &ed->seqbase, ms->parent_strip, true);
+      strip_update_muting_recursive(scene, &ed->channels, &ed->seqbase, ms->parent_strip, true);
     }
     else {
-      strip_update_muting_recursive(&ed->channels, &ed->seqbase, nullptr, false);
+      strip_update_muting_recursive(scene, &ed->channels, &ed->seqbase, nullptr, false);
     }
   }
 }
@@ -192,9 +195,17 @@ bool edit_move_strip_to_seqbase(Scene *scene,
                                 Strip *strip,
                                 ListBaseT<Strip> *dst_seqbase)
 {
+  Strip *old_meta = lookup_meta_by_strip(scene->ed, strip);
+  if (old_meta != nullptr) {
+    relations_invalidate_cache_raw(scene, old_meta);
+  }
+
   /* Move to meta. */
   BLI_remlink(seqbase, strip);
   BLI_addtail(dst_seqbase, strip);
+  strip_lookup_invalidate(scene->ed);
+
+  /* Invalidate the strip, as well as its new parent meta strip (after being moved above). */
   relations_invalidate_cache(scene, strip);
 
   /* Update meta. */

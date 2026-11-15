@@ -2041,6 +2041,7 @@ void RE_RenderFrame(Render *re,
     do_render_full_pipeline(re);
 
     const bool should_write = write_still && !(re->flag & R_SKIP_WRITE);
+    bool is_written = false;
     if (should_write && !G.is_break) {
       if (BKE_imtype_is_movie(rd.im_format.imtype)) {
         /* operator checks this but in case its called from elsewhere */
@@ -2067,7 +2068,8 @@ void RE_RenderFrame(Render *re,
             nullptr);
 
         if (errors.is_empty()) {
-          do_write_image_or_movie(re, bmain, scene, 0, filepath_override, write_still);
+          is_written = do_write_image_or_movie(
+              re, bmain, scene, 0, filepath_override, write_still);
         }
         else {
           BKE_report_path_template_errors(re->reports, RPT_ERROR, rd.pic, errors);
@@ -2075,9 +2077,9 @@ void RE_RenderFrame(Render *re,
       }
     }
 
-    /* keep after file save */
+    /* Keep after file save. */
     render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_POST);
-    if (should_write) {
+    if (is_written) {
       render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_WRITE);
     }
   }
@@ -2459,6 +2461,8 @@ void RE_RenderAnim(Render *re,
   const bool do_write_file = (!(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
                               (re_type->flag & RE_USE_POSTPROCESS)) &&
                              write_anim;
+  const bool write_audio = is_movie && do_write_file &&
+                           rd.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE;
 
   render_init_depsgraph(re);
 
@@ -2534,6 +2538,9 @@ void RE_RenderAnim(Render *re,
     }
 
     render_update_depsgraph(re);
+    if (write_audio) {
+      BKE_sound_record_scene_audio_animation(re->pipeline_depsgraph);
+    }
 
     /* Only border now, TODO(ton): camera lens. */
     render_init_from_main(re, &rd, bmain, scene, single_layer, camera_override, true, false);
@@ -2636,15 +2643,26 @@ void RE_RenderAnim(Render *re,
     totrendered++;
 
     const bool should_write = !(re->flag & R_SKIP_WRITE);
+    bool is_written = false;
     if (re->display->test_break() == 0) {
       if (!G.is_break && should_write) {
-        if (!do_write_image_or_movie(re, bmain, scene, totvideos, nullptr, write_anim)) {
+        is_written = do_write_image_or_movie(re, bmain, scene, totvideos, nullptr, write_anim);
+        if (!is_written) {
           G.is_break = true;
         }
       }
     }
     else {
       G.is_break = true;
+    }
+
+    /* A written frame is complete, even if cancelled during file save. */
+    if (is_written || !G.is_break) {
+      /* keep after file save */
+      render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_POST);
+      if (is_written) {
+        render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_WRITE);
+      }
     }
 
     if (G.is_break == true) {
@@ -2675,16 +2693,7 @@ void RE_RenderAnim(Render *re,
           }
         }
       }
-
       break;
-    }
-
-    if (G.is_break == false) {
-      /* keep after file save */
-      render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_POST);
-      if (should_write) {
-        render_callback_exec_id(re, re->main, &scene->id, BKE_CB_EVT_RENDER_WRITE);
-      }
     }
   }
 

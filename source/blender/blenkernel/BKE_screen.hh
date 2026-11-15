@@ -783,6 +783,10 @@ enum class MenuTypeFlag {
    * Automatically start searching in the menu when pressing a key.
    */
   SearchOnKeyPress = (1 << 1),
+  /**
+   * Don't sort menu items alphabetically when flag is set.
+   */
+  KeepOrder = (1 << 2),
 };
 ENUM_OPERATORS(MenuTypeFlag)
 
@@ -969,6 +973,17 @@ void BKE_region_callback_refresh_tag_gizmomap_set(void (*callback)(wmGizmoMap *)
 LayoutPanelState *BKE_panel_layout_panel_state_ensure(Panel *panel,
                                                       StringRef idname,
                                                       bool default_closed);
+
+/**
+ * Get the active item state for the given identifier, creating it if it doesn't exist yet.
+ * This marks the state as used, see #uiActiveItemState::last_used.
+ */
+uiActiveItemState *BKE_region_active_item_state_ensure(ARegion *region, StringRef idname);
+/**
+ * Get the active item state for the given identifier, null when it doesn't exist.
+ */
+const uiActiveItemState *BKE_region_active_item_state_find(const ARegion *region,
+                                                           StringRef idname);
 
 /**
  * Find a region of type \a region_type in provided \a regionbase.

@@ -23,6 +23,8 @@
 
 #include "DEG_depsgraph.hh"
 
+#include "IMB_imbuf.hh"
+
 #include "SEQ_iterator.hh"
 #include "SEQ_prefetch.hh"
 #include "SEQ_preview_cache.hh"
@@ -61,6 +63,9 @@ void cache_cleanup(Scene *scene, CacheCleanup mode)
     intra_frame_cache_invalidate(scene);
     preview_cache_invalidate(scene);
   }
+  if (mode == CacheCleanup::All) {
+    IMB_pixel_pool_clear();
+  }
 }
 
 void cache_settings_changed(Scene *scene)
@@ -78,8 +83,19 @@ void cache_settings_changed(Scene *scene)
 bool is_cache_full(const Scene *scene)
 {
   size_t cache_limit = size_t(U.memcachelimit) * 1024 * 1024;
-  return source_image_cache_calc_memory_size(scene) + final_image_cache_calc_memory_size(scene) >
+  return source_image_cache_calc_memory_size(scene) + final_image_cache_calc_memory_size(scene) +
+             IMB_pixel_pool_unused_bytes_get() >
          cache_limit;
+}
+
+/* After cache image eviction, trim unused pixel pool storage too,
+ * to fit within overall cache budget. */
+static void trim_pixel_pool_to_cache_budget(const Scene *scene)
+{
+  const size_t cache_limit = size_t(U.memcachelimit) * 1024 * 1024;
+  const size_t image_cache_bytes = source_image_cache_calc_memory_size(scene) +
+                                   final_image_cache_calc_memory_size(scene);
+  IMB_pixel_pool_trim(cache_limit - std::min(cache_limit, image_cache_bytes));
 }
 
 bool evict_caches_if_full(Scene *scene)
@@ -124,10 +140,12 @@ bool evict_caches_if_full(Scene *scene)
       }
     }
 
+    /* Evicting an image can return pixels to the pixel pool. Trim that if needed,
+     * before checking whether more images need to be evicted. */
+    trim_pixel_pool_to_cache_budget(scene);
   } while (is_cache_full(scene) && (evicted_final || evicted_source));
 
-  /* Did we evict anything to free up the cache? */
-  return !(evicted_final || evicted_source);
+  return is_cache_full(scene);
 }
 
 static void update_range_with_effects(const Scene *scene, const Strip *strip, int2 &r_range)
@@ -422,23 +440,6 @@ void relations_session_uid_generate(Strip *strip)
   strip->runtime->session_uid = BLI_session_uid_generate();
 }
 
-static bool get_uids_cb(Strip *strip, void *user_data)
-{
-  Set<SessionUID> &used_uids = *static_cast<Set<SessionUID> *>(user_data);
-  const SessionUID &session_uid = strip->runtime->session_uid;
-  if (!session_uid.is_generated()) {
-    printf("Sequence %s does not have UID generated.\n", strip->name);
-    return true;
-  }
-
-  if (used_uids.contains(session_uid)) {
-    printf("Sequence %s has duplicate UID generated.\n", strip->name);
-    return true;
-  }
-  used_uids.add(session_uid);
-  return true;
-}
-
 void relations_check_uids_unique_and_report(const Scene *scene)
 {
   if (scene->ed == nullptr) {
@@ -446,7 +447,20 @@ void relations_check_uids_unique_and_report(const Scene *scene)
   }
 
   Set<SessionUID> used_uids;
-  foreach_strip(&scene->ed->seqbase, get_uids_cb, &used_uids);
+  foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+    const SessionUID &session_uid = strip->runtime->session_uid;
+    if (!session_uid.is_generated()) {
+      printf("Sequence %s does not have UID generated.\n", strip->name);
+      return true;
+    }
+
+    if (used_uids.contains(session_uid)) {
+      printf("Sequence %s has duplicate UID generated.\n", strip->name);
+      return true;
+    }
+    used_uids.add(session_uid);
+    return true;
+  });
 }
 
 bool exists_in_seqbase(const Strip *strip, const ListBaseT<Strip> *seqbase)

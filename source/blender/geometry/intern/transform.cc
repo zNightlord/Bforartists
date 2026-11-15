@@ -66,7 +66,7 @@ static void transform_pointcloud(PointCloud &pointcloud, const float4x4 &transfo
   position.finish();
 }
 
-static void translate_greasepencil(GreasePencil &grease_pencil, const float3 translation)
+static void translate_greasepencil_layers(GreasePencil &grease_pencil, const float3 translation)
 {
   using namespace blender::bke::greasepencil;
   for (const int layer_index : grease_pencil.layers().index_range()) {
@@ -74,6 +74,19 @@ static void translate_greasepencil(GreasePencil &grease_pencil, const float3 tra
     float4x4 local_transform = layer.local_transform();
     local_transform.location() += translation;
     layer.set_local_transform(local_transform);
+  }
+}
+
+static void translate_greasepencil_points(GreasePencil &grease_pencil, const float3 translation)
+{
+  using namespace blender::bke::greasepencil;
+  for (const int layer_index : grease_pencil.layers().index_range()) {
+    Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
+    if (drawing == nullptr || drawing->strokes().is_empty()) {
+      continue;
+    }
+    drawing->strokes_for_write().translate(translation);
+    drawing->tag_positions_changed();
   }
 }
 
@@ -228,11 +241,9 @@ static void translate_gizmos_edit_hints(bke::GizmoEditHints &edit_hints, const f
   }
 }
 
-void translate_geometry(bke::GeometrySet &geometry, const float3 translation)
+static void translate_mesh_curves_pointcloud_instances(bke::GeometrySet &geometry,
+                                                       const float3 translation)
 {
-  if (math::is_zero(translation)) {
-    return;
-  }
   if (Curves *curves = geometry.get_curves_for_write()) {
     curves->geometry.wrap().translate(translation);
   }
@@ -242,14 +253,33 @@ void translate_geometry(bke::GeometrySet &geometry, const float3 translation)
   if (PointCloud *pointcloud = geometry.get_pointcloud_for_write()) {
     translate_pointcloud(*pointcloud, translation);
   }
+  if (bke::Instances *instances = geometry.get_instances_for_write()) {
+    translate_instances(*instances, translation);
+  }
+}
+
+void translate_points_and_instances(bke::GeometrySet &geometry, const float3 translation)
+{
+  if (math::is_zero(translation)) {
+    return;
+  }
+  translate_mesh_curves_pointcloud_instances(geometry, translation);
   if (GreasePencil *grease_pencil = geometry.get_grease_pencil_for_write()) {
-    translate_greasepencil(*grease_pencil, translation);
+    translate_greasepencil_points(*grease_pencil, translation);
+  }
+}
+
+void translate_geometry(bke::GeometrySet &geometry, const float3 translation)
+{
+  if (math::is_zero(translation)) {
+    return;
+  }
+  translate_mesh_curves_pointcloud_instances(geometry, translation);
+  if (GreasePencil *grease_pencil = geometry.get_grease_pencil_for_write()) {
+    translate_greasepencil_layers(*grease_pencil, translation);
   }
   if (Volume *volume = geometry.get_volume_for_write()) {
     translate_volume(*volume, translation);
-  }
-  if (bke::Instances *instances = geometry.get_instances_for_write()) {
-    translate_instances(*instances, translation);
   }
   if (bke::CurvesEditHints *curve_edit_hints = geometry.get_curve_edit_hints_for_write()) {
     translate_curve_edit_hints(*curve_edit_hints, translation);

@@ -25,7 +25,7 @@ namespace blender {
 struct ARegion;
 struct BMBVHTree;
 struct BMEdge;
-struct BMEditMesh;
+struct EditMesh;
 struct BMElem;
 struct BMFace;
 struct BMLoop;
@@ -53,37 +53,6 @@ struct wmOperator;
 struct UvElement;
 struct UvElementMap;
 
-/* `editmesh_utils.cc` */
-class EditMeshSymmetryHelper {
- public:
-  static std::optional<EditMeshSymmetryHelper> create_if_needed(Object *ob, uchar htype);
-
-  bool any_mirror_vert_selected(BMVert *v, char hflag) const;
-  bool any_mirror_edge_selected(BMEdge *e, char hflag) const;
-  bool any_mirror_face_selected(BMFace *f, char hflag) const;
-
-  void set_hflag_on_mirror_verts(BMVert *v, char hflag, bool value) const;
-  void set_hflag_on_mirror_edges(BMEdge *e, char hflag, bool value) const;
-  void set_hflag_on_mirror_faces(BMFace *f, char hflag, bool value) const;
-
-  void apply_on_mirror_verts(BMVert *v, FunctionRef<void(BMVert *)> op) const;
-  void apply_on_mirror_edges(BMEdge *e, FunctionRef<void(BMEdge *)> op) const;
-  void apply_on_mirror_faces(BMFace *f, FunctionRef<void(BMFace *)> op) const;
-
- private:
-  EditMeshSymmetryHelper(Object *ob, uchar htype);
-
-  BMEditMesh *em_;
-  Mesh *mesh_;
-  BMesh *bm_;
-  uchar htype_;
-  bool use_topology_mirror_;
-
-  Map<BMVert *, Vector<BMVert *>> vert_to_mirror_map_;
-  Map<BMEdge *, Vector<BMEdge *>> edge_to_mirror_map_;
-  Map<BMFace *, Vector<BMFace *>> face_to_mirror_map_;
-};
-
 /**
  * \param em: Edit-mesh used for generating mirror data.
  * \param use_self: Allow a vertex to point to itself (middle verts).
@@ -94,7 +63,7 @@ class EditMeshSymmetryHelper {
  * \param r_index: Optional array to write into, as an alternative to a custom-data layer
  * (length of total verts).
  */
-void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
+void EDBM_verts_mirror_cache_begin_ex(EditMesh *em,
                                       BMesh *bm,
                                       int axis,
                                       bool use_self,
@@ -103,35 +72,44 @@ void EDBM_verts_mirror_cache_begin_ex(BMEditMesh *em,
                                       bool use_topology,
                                       float maxdist,
                                       int *r_index);
-void EDBM_verts_mirror_cache_begin(BMEditMesh *em,
+void EDBM_verts_mirror_cache_begin(EditMesh *em,
                                    BMesh *bm,
                                    int axis,
                                    bool use_self,
                                    bool use_select,
                                    bool respecthide,
                                    bool use_topology);
-void EDBM_verts_mirror_apply(BMEditMesh *em, BMesh *bm, int sel_from, int sel_to);
-BMVert *EDBM_verts_mirror_get(BMEditMesh *em, BMesh *bm, BMVert *v);
-BMEdge *EDBM_verts_mirror_get_edge(BMEditMesh *em, BMesh *bm, BMEdge *e);
-BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMesh *bm, BMFace *f);
-void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMesh *bm, BMVert *v);
-void EDBM_verts_mirror_cache_end(BMEditMesh *em);
+void EDBM_verts_mirror_apply(EditMesh *em, BMesh *bm, int sel_from, int sel_to);
+BMVert *EDBM_verts_mirror_get(EditMesh *em, BMesh *bm, BMVert *v);
+BMEdge *EDBM_verts_mirror_get_edge(EditMesh *em, BMesh *bm, BMEdge *e);
+BMFace *EDBM_verts_mirror_get_face(EditMesh *em, BMesh *bm, BMFace *f);
+void EDBM_verts_mirror_cache_clear(EditMesh *em, BMesh *bm, BMVert *v);
+void EDBM_verts_mirror_cache_end(EditMesh *em);
 
 void EDBM_mesh_normals_update_ex(BMesh *bm, const BMeshNormalsUpdate_Params *params);
 void EDBM_mesh_normals_update(BMesh *bm);
 
 void EDBM_selectmode_to_scene(bContext *C);
+/**
+ * Put the object's mesh into edit mode.
+ *
+ * \param add_key_index: Whether the #BMesh will need #CD_SHAPE_KEYINDEX to track vertex identity,
+ * for hooks and vertex parents on a mesh with no shape keys.
+ */
 void EDBM_mesh_make(Object *ob, int select_mode, bool add_key_index);
 /** Replaces the edit-mesh in the object with a new one based on the given mesh. */
 void EDBM_mesh_make_from_mesh(Object *ob, Mesh *src_mesh, int select_mode, bool add_key_index);
 /**
  * Should only be called on the active edit-mesh, otherwise call #BKE_editmesh_free_data.
  */
-void EDBM_mesh_free_data(BMEditMesh *em);
+void EDBM_mesh_free_data(EditMesh *em);
 /**
  * \warning This can invalidate the #Mesh runtime cache of other objects (for linked duplicates).
  * Most callers should run #DEG_id_tag_update on `ob->data`, see: #46738, #46913.
  * This ensures #BKE_object_free_derived_caches runs on all objects that use this mesh.
+ *
+ * Updates hook and vertex-parent indices for the topology changes made since edit mode was
+ * entered or the last load.
  */
 void EDBM_mesh_load_ex(Main *bmain, Object *ob, bool free_data);
 void EDBM_mesh_load(Main *bmain, Object *ob);
@@ -206,11 +184,6 @@ int *BM_uv_element_map_ensure_unique_index(UvElementMap *element_map);
  * Can we edit UVs for this mesh?
  */
 bool EDBM_uv_check(const Mesh *mesh);
-/**
- * last_sel, use em->act_face otherwise get the last selected face in the edit-selections
- * at the moment, last_sel is mainly useful for making sure the space image doesn't flicker.
- */
-BMFace *EDBM_uv_active_face_get(Mesh *mesh, bool sloppy, bool selected);
 
 void BM_uv_vert_map_free(UvVertMap *vmap);
 UvMapVert *BM_uv_vert_map_at_index(UvVertMap *vmap, unsigned int v);
@@ -253,17 +226,7 @@ void ED_mesh_undosys_type(UndoType *ut);
 /* `editmesh_select.cc` */
 
 void EDBM_select_mirrored(
-    BMEditMesh *em, Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
-
-#if 0 /* Unused but seems useful to keep. */
-/**
- * Select mirrored elements on all enabled axis.
- * Does nothing if selection symmetry isn't enabled.
- *
- * \return true if the selection changed.
- */
-bool EDBM_select_mirrored_extend_all(Object *obedit, BMEditMesh *em);
-#endif
+    EditMesh *em, Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
 
 /**
  * Nearest vertex under the cursor.
@@ -336,7 +299,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
  * When switching select mode, makes sure selection is consistent for editing
  * also for paranoia checks to make sure edge or face mode works.
  */
-void EDBM_selectmode_set(BMEditMesh *em, BMesh *bm, short selectmode);
+void EDBM_selectmode_set(EditMesh *em, BMesh *bm, short selectmode);
 /**
  * Expand & Contract the Selection
  * (used when changing modes and Ctrl key held)
@@ -378,13 +341,13 @@ bool EDBM_selectmode_toggle_multi(
  * \return true if the mode is changed.
  */
 bool EDBM_selectmode_disable(
-    Scene *scene, BMEditMesh *em, BMesh *bm, short selectmode_disable, short selectmode_fallback);
+    Scene *scene, EditMesh *em, BMesh *bm, short selectmode_disable, short selectmode_fallback);
 
 bool EDBM_deselect_by_material(BMesh *bm, short index, bool select);
 
 void EDBM_select_toggle_all(BMesh *bm);
 
-void EDBM_select_swap(BMEditMesh *em, BMesh *bm); /* exported for UV */
+void EDBM_select_swap(EditMesh *em, BMesh *bm); /* exported for UV */
 bool EDBM_select_interior_faces(BMesh *bm);
 ViewContext em_setup_viewcontext(bContext *C); /* rename? */
 
@@ -584,13 +547,13 @@ BMBackup EDBM_redo_state_store(BMesh *bm);
 /**
  * Restore a BMesh from backup.
  */
-void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, BMesh *bm, bool recalc_looptris)
+void EDBM_redo_state_restore(BMBackup *backup, EditMesh *em, BMesh *bm, bool recalc_looptris)
     ATTR_NONNULL(1, 2, 3);
 /**
  * Delete the backup, flushing it to an edit-mesh.
  */
 void EDBM_redo_state_restore_and_free(BMBackup *backup,
-                                      BMEditMesh *em,
+                                      EditMesh *em,
                                       BMesh *bm,
                                       bool recalc_looptris) ATTR_NONNULL(1, 2, 3);
 void EDBM_redo_state_free(BMBackup *backup) ATTR_NONNULL(1);

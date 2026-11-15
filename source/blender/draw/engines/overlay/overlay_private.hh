@@ -477,9 +477,9 @@ class ShaderModule {
   StaticShader mesh_edit_facedot = shader_clippable("overlay_edit_mesh_facedot");
   StaticShader mesh_edit_vert = shader_clippable("overlay_edit_mesh_vert");
   StaticShader mesh_edit_skin_root = shader_clippable("overlay_edit_mesh_skin_root");
-  StaticShader mesh_face_normal = shader_clippable("overlay_mesh_face_normal");
-  StaticShader mesh_loop_normal = shader_clippable("overlay_mesh_loop_normal");
-  StaticShader mesh_vert_normal = shader_clippable("overlay_mesh_vert_normal");
+  StaticShader mesh_face_normal = shader_clippable("overlay_edit_mesh_normals_face");
+  StaticShader mesh_loop_normal = shader_clippable("overlay_edit_mesh_normals_loop");
+  StaticShader mesh_vert_normal = shader_clippable("overlay_edit_mesh_normals_vert");
   StaticShader motion_path_line = shader_clippable("overlay_motion_path_line");
   StaticShader motion_path_vert = shader_clippable("overlay_motion_path_point");
   StaticShader outline_detect = {"overlay_outline_detect"};
@@ -528,7 +528,7 @@ class ShaderModule {
   StaticShader armature_stick = shader_selectable("overlay_armature_stick");
   StaticShader armature_wire = shader_selectable("overlay_armature_wire");
   StaticShader depth_curves = shader_selectable("overlay_depth_curves");
-  StaticShader depth_grease_pencil = shader_selectable("overlay_depth_gpencil");
+  StaticShader depth_grease_pencil = shader_selectable("overlay_depth_grease_pencil");
   StaticShader depth_mesh = shader_selectable("overlay_depth_mesh");
   StaticShader depth_mesh_conservative = shader_selectable("overlay_depth_mesh_conservative");
   StaticShader depth_pointcloud = shader_selectable("overlay_depth_pointcloud");
@@ -542,10 +542,10 @@ class ShaderModule {
   StaticShader extra_ground_line = shader_selectable("overlay_extra_groundline");
   StaticShader image_plane = shader_selectable("overlay_image");
   StaticShader image_plane_depth_bias = shader_selectable("overlay_image_depth_bias");
-  StaticShader particle_dot = shader_selectable("overlay_particle_dot");
+  StaticShader particle_dot = shader_selectable("overlay_particle_point_dot");
   StaticShader particle_shape = shader_selectable("overlay_particle_shape");
-  StaticShader particle_hair = shader_selectable("overlay_particle_hair");
-  StaticShader wireframe_mesh = shader_selectable("overlay_wireframe");
+  StaticShader particle_hair = shader_selectable("overlay_particle_strand");
+  StaticShader wireframe_mesh = shader_selectable("overlay_wireframe_mesh");
   /* Draw objects without edges for the wireframe overlay. */
   StaticShader wireframe_points = shader_selectable("overlay_wireframe_points");
   StaticShader wireframe_points_with_radius = shader_selectable(

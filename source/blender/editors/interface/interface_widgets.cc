@@ -1703,7 +1703,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
     const float parts_strwidth = (okwidth - sep_strwidth) / 2.0f;
 
     if (rpart) {
-      STRNCPY(rpart_buf, rpart);
+      STRNCPY_UTF8(rpart_buf, rpart);
       *rpart = '\0';
       rpart = rpart_buf;
     }
@@ -1807,7 +1807,7 @@ static void text_clip_middle(const uiFontStyle *fstyle, Button *but, const rcti 
 
   but->ofs = 0;
   char new_drawstr[UI_MAX_DRAW_STR];
-  STRNCPY(new_drawstr, but->drawstr.c_str());
+  STRNCPY_UTF8(new_drawstr, but->drawstr.c_str());
   but->strwidth = text_clip_middle_ex(fstyle,
                                       new_drawstr,
                                       okwidth,
@@ -1839,7 +1839,7 @@ static void text_clip_middle_protect_right(const uiFontStyle *fstyle,
 
   but->ofs = 0;
   char new_drawstr[UI_MAX_DRAW_STR];
-  STRNCPY(new_drawstr, but->drawstr.c_str());
+  STRNCPY_UTF8(new_drawstr, but->drawstr.c_str());
   but->strwidth = text_clip_middle_ex(fstyle, new_drawstr, okwidth, minwidth, rsep);
   but->drawstr = new_drawstr;
 }
@@ -1863,7 +1863,7 @@ Vector<StringRef> text_clip_multiline_middle(const uiFontStyle *fstyle,
   clipped_lines.reserve(max_lines);
 
   if (max_lines == 1) {
-    STRNCPY(clipped_str_buf, str);
+    STRNCPY_UTF8(clipped_str_buf, str);
 
     text_clip_middle_ex(fstyle, clipped_str_buf, max_line_width, UI_ICON_SIZE, '\0');
     clipped_lines.append(clipped_str_buf.data());
@@ -1871,7 +1871,7 @@ Vector<StringRef> text_clip_multiline_middle(const uiFontStyle *fstyle,
   }
   if (max_lines == 2) {
     clipped_lines.append(lines[0]);
-    STRNCPY(clipped_str_buf, str + lines[0].size());
+    STRNCPY_UTF8(clipped_str_buf, str + lines[0].size());
     text_clip_middle_ex(fstyle, clipped_str_buf, max_line_width, UI_ICON_SIZE, '\0', false);
     clipped_lines.append(clipped_str_buf.data());
     return clipped_lines;
@@ -1888,7 +1888,7 @@ Vector<StringRef> text_clip_multiline_middle(const uiFontStyle *fstyle,
 
   /* Clip the middle of the middle line. */
   {
-    STRNCPY(clipped_str_buf, lines[middle_index].data());
+    STRNCPY_UTF8(clipped_str_buf, lines[middle_index].data());
     text_clip_middle_ex(fstyle, clipped_str_buf, max_line_width, UI_ICON_SIZE, '\0', false);
     clipped_lines.append(clipped_str_buf.data());
   }
@@ -1990,9 +1990,8 @@ static void text_clip_right_label(const uiFontStyle *fstyle, Button *but, const 
   const int border = UI_TEXT_CLIP_MARGIN + 1;
   const int okwidth = max_ii(BLI_rcti_size_x(rect) - border, 0);
 
-  int drawstr_len = but->drawstr.size();
   char new_drawstr[UI_MAX_DRAW_STR];
-  STRNCPY(new_drawstr, but->drawstr.c_str());
+  int drawstr_len = STRNCPY_UTF8_RLEN(new_drawstr, but->drawstr.c_str());
 
   const char *cpend = new_drawstr + drawstr_len;
 
@@ -2034,7 +2033,7 @@ static void text_clip_right_label(const uiFontStyle *fstyle, Button *but, const 
 
       /* shift the text after and including cp2 back by 1 char,
        * +1 to include null terminator */
-      memmove(cp2 - bytes, cp2, drawstr_len + 1);
+      memmove(cp2 - bytes, cp2, (new_drawstr + drawstr_len + 1) - cp2);
       cp2 -= bytes;
 
       drawstr_len -= bytes;
@@ -2076,7 +2075,7 @@ static void text_clip_right_label(const uiFontStyle *fstyle, Button *but, const 
   cpoin = strrchr(new_drawstr, ':');
   if (cpoin && (cpoin - new_drawstr > 0) && (drawstr_len < (sizeof(new_drawstr) - sep_len))) {
     /* We shortened the string and still have a colon, so insert ellipsis. */
-    memmove(cpoin + sep_len, cpoin, cpend - cpoin);
+    memmove(cpoin + sep_len, cpoin, (new_drawstr + drawstr_len + 1) - cpoin);
     memcpy(cpoin, sep, sep_len);
     but->strwidth = BLF_width(
         fstyle->uifont_id, new_drawstr + but->ofs, sizeof(new_drawstr) - but->ofs);
@@ -2548,14 +2547,12 @@ static void widget_draw_text(const uiFontStyle *fstyle,
       if (ime_data && !ime_data->composite.empty()) {
         /* insert composite string into cursor pos */
         char tmp_drawstr[UI_MAX_DRAW_STR];
-        STRNCPY(tmp_drawstr, drawstr);
-        BLI_snprintf(tmp_drawstr,
-                     sizeof(tmp_drawstr),
-                     "%.*s%s%s",
-                     but->pos,
-                     but->editstr,
-                     ime_data->composite.c_str(),
-                     but->editstr + but->pos);
+        SNPRINTF_UTF8(tmp_drawstr,
+                      "%.*s%s%s",
+                      but->pos,
+                      but->editstr,
+                      ime_data->composite.c_str(),
+                      but->editstr + but->pos);
         ime_drawstr = tmp_drawstr;
         drawstr = ime_drawstr.c_str();
       }
@@ -6656,8 +6653,7 @@ void draw_preview_item_stateless(const uiFontStyle *fstyle,
     const float okwidth = float(BLI_rcti_size_x(&trect));
     const float minwidth = UI_ICON_SIZE;
 
-    memcpy(drawstr, name.data(), name.size());
-    drawstr[name.size()] = '\0';
+    name.copy_utf8_truncated(drawstr);
     text_clip_middle_ex(fstyle, drawstr, okwidth, minwidth, '\0');
 
     FontStyleDrawParams params{};

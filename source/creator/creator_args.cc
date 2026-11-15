@@ -29,6 +29,7 @@
 #  include "BLI_path_utils.hh"
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
+#  include "BLI_string_utils.hh"
 #  include "BLI_system.hh"
 #  include "BLI_threads.hh"
 #  include "BLI_utildefines.hh"
@@ -103,7 +104,6 @@ struct BuildDefs {
   bool with_opengl_backend;
   bool with_renderdoc;
   bool with_input_ndof;
-  bool with_vulkan_backend;
   bool with_xr_openxr;
 };
 
@@ -145,9 +145,6 @@ static void build_defs_init(BuildDefs *build_defs, bool force_all)
 #  endif
 #  ifdef WITH_INPUT_NDOF
   build_defs->with_input_ndof = true;
-#  endif
-#  ifdef WITH_VULKAN_BACKEND
-  build_defs->with_vulkan_backend = true;
 #  endif
 #  ifdef WITH_XR_OPENXR
   build_defs->with_xr_openxr = true;
@@ -780,9 +777,6 @@ static void print_help(bArgs *ba, bool all)
   BLI_args_print_arg_doc(ba, "--debug-gpu-backend-no-fallback");
   if (defs.with_renderdoc) {
     BLI_args_print_arg_doc(ba, "--debug-gpu-renderdoc");
-  }
-  if (defs.with_vulkan_backend) {
-    BLI_args_print_arg_doc(ba, "--debug-gpu-vulkan-local-read");
   }
   BLI_args_print_arg_doc(ba, "--debug-gpu-no-hw-raytracing");
   BLI_args_print_arg_doc(ba, "--debug-wm");
@@ -1447,9 +1441,6 @@ static const char arg_handle_debug_mode_generic_set_doc_depsgraph_uid[] =
 static const char arg_handle_debug_mode_generic_set_doc_gpu_force_workarounds[] =
     "\n\t"
     "Enable workarounds for typical GPU issues and disable all GPU extensions.";
-static const char arg_handle_debug_mode_generic_set_doc_gpu_force_vulkan_local_read[] =
-    "\n\t"
-    "Force Vulkan dynamic rendering local read when supported by device.";
 static const char arg_handle_debug_mode_generic_set_doc_gpu_device_no_fallback[] =
     "\n\t"
     "Fail instead of falling back when '--gpu-device' does not match a usable Vulkan device.";
@@ -1579,7 +1570,7 @@ static const char arg_handle_debug_gpu_scope_capture_set_doc[] =
 static int arg_handle_debug_gpu_scope_capture_set(int argc, const char **argv, void * /*data*/)
 {
   if (argc > 1) {
-    STRNCPY(G.gpu_debug_scope_name, argv[1]);
+    STRNCPY_UTF8(G.gpu_debug_scope_name, argv[1]);
     return 1;
   }
   fprintf(stderr, "\nError: you must specify a scope name to capture.\n");
@@ -1594,7 +1585,7 @@ static const char arg_handle_debug_gpu_shader_source_doc[] =
 static int arg_handle_debug_gpu_shader_source(int argc, const char **argv, void * /*data*/)
 {
   if (argc > 1) {
-    STRNCPY(G.gpu_debug_shader_source_name, argv[1]);
+    STRNCPY_UTF8(G.gpu_debug_shader_source_name, argv[1]);
     return 1;
   }
   fprintf(stderr, "\nError: you must specify a shader name to capture.\n");
@@ -2920,17 +2911,14 @@ static int arg_handle_addons_set(int argc, const char **argv, void *data)
   /* Workaround for scripts not getting a `bpy.context.scene`, causes internal errors elsewhere. */
   if (argc > 1) {
 #  ifdef WITH_PYTHON
-    const char script_str[] =
+    char *str = BLI_string_joinN(
         "from _bpy_internal.addons.cli import set_from_cli\n"
-        "set_from_cli('%s')";
-    const int slen = strlen(argv[1]) + (sizeof(script_str) - 2);
-    char *str = static_cast<char *>(malloc(slen));
+        "set_from_cli('",
+        argv[1],
+        "')");
     bContext *C = static_cast<bContext *>(data);
-    BLI_snprintf(str, slen, script_str, argv[1]);
-
-    BLI_assert(strlen(str) + 1 == slen);
     BPY_CTX_SETUP(BPY_run_string_exec(C, nullptr, str));
-    free(str);
+    MEM_delete(str);
 #  else
     UNUSED_VARS(argv, data);
 #  endif /* WITH_PYTHON */
@@ -3368,13 +3356,6 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
                "--debug-gpu-force-workarounds",
                CB_EX(arg_handle_debug_mode_generic_set, gpu_force_workarounds),
                reinterpret_cast<void *>(G_DEBUG_GPU_FORCE_WORKAROUNDS));
-  if (defs.with_vulkan_backend) {
-    BLI_args_add(ba,
-                 nullptr,
-                 "--debug-gpu-vulkan-local-read",
-                 CB_EX(arg_handle_debug_mode_generic_set, gpu_force_vulkan_local_read),
-                 reinterpret_cast<void *>(G_DEBUG_GPU_FORCE_VULKAN_LOCAL_READ));
-  }
   BLI_args_add(ba,
                nullptr,
                "--debug-gpu-no-hw-raytracing",

@@ -259,12 +259,14 @@ template<typename T> void closure_base_copy(ClosureUndetermined &cl, T in_cl)
 }
 
 template void closure_base_copy<ClosureDiffuse>(ClosureUndetermined &, ClosureDiffuse);
+template void closure_base_copy<ClosureOrenNayar>(ClosureUndetermined &, ClosureOrenNayar);
 template void closure_base_copy<ClosureSubsurface>(ClosureUndetermined &, ClosureSubsurface);
 template void closure_base_copy<ClosureTranslucent>(ClosureUndetermined &, ClosureTranslucent);
 template void closure_base_copy<ClosureReflection>(ClosureUndetermined &, ClosureReflection);
 template void closure_base_copy<ClosureRefraction>(ClosureUndetermined &, ClosureRefraction);
 template void closure_base_copy<ClosureThinRefraction>(ClosureUndetermined &,
                                                        ClosureThinRefraction);
+template void closure_base_copy<ClosureSheen>(ClosureUndetermined &, ClosureSheen);
 
 /* Single BSDFs. */
 Closure closure_eval(KernelGlobals &kg, ShadingData &sd, ClosureDiffuse diffuse)
@@ -272,6 +274,26 @@ Closure closure_eval(KernelGlobals &kg, ShadingData &sd, ClosureDiffuse diffuse)
   if (kg.pipe.use_diffuse) [[static_branch]] {
     ClosureUndetermined cl;
     closure_base_copy(cl, diffuse);
+    if (!kg.pipe.use_clearcoat && kg.pipe.use_translucent && kg.pipe.closure_bin_count > 1)
+        [[static_branch]]
+    {
+      /* Use second slot so we can have diffuse + translucent without noise. */
+      closure_select(sd.closure_bins[1], cl);
+    }
+    else {
+      /* Either is single closure or use same bin as transmission bin. */
+      closure_select(sd.closure_bins[0], cl);
+    }
+  }
+  return Closure(0);
+}
+
+Closure closure_eval(KernelGlobals &kg, ShadingData &sd, ClosureOrenNayar oren_nayar)
+{
+  if (kg.pipe.use_diffuse) [[static_branch]] {
+    ClosureUndetermined cl;
+    closure_base_copy(cl, oren_nayar);
+    cl.data.x = oren_nayar.roughness;
     if (!kg.pipe.use_clearcoat && kg.pipe.use_translucent && kg.pipe.closure_bin_count > 1)
         [[static_branch]]
     {
@@ -484,18 +506,24 @@ Closure closure_eval(KernelGlobals &kg,
   return Closure(0);
 }
 
-/* Principled BSDF. */
-Closure closure_eval(KernelGlobals &kg,
-                     ShadingData &sd,
-                     ClosureDiffuse diffuse,
-                     ClosureReflection reflection,
-                     ClosureReflection coat,
-                     ClosureRefraction refraction)
+/* Sheen BSDF. */
+Closure closure_eval(KernelGlobals &kg, ShadingData &sd, ClosureSheen sheen)
 {
-  closure_eval(kg, sd, diffuse);
-  closure_eval(kg, sd, reflection);
-  closure_eval(kg, sd, coat);
-  closure_eval(kg, sd, refraction);
+  if (kg.pipe.use_diffuse) [[static_branch]] {
+    ClosureUndetermined cl;
+    closure_base_copy(cl, sheen);
+    cl.data.x = sheen.roughness;
+    if (!kg.pipe.use_clearcoat && kg.pipe.use_translucent && kg.pipe.closure_bin_count > 1)
+        [[static_branch]]
+    {
+      /* Use second slot so we can have sheen + translucent without noise. */
+      closure_select(sd.closure_bins[1], cl);
+    }
+    else {
+      /* Either is single closure or use same bin as transmission bin. */
+      closure_select(sd.closure_bins[0], cl);
+    }
+  }
   return Closure(0);
 }
 
@@ -837,6 +865,36 @@ float3 brdf_lut(KernelGlobals &kg,
                              F_brdf_single_scatter(F0, F90, lut);
   }
   return float3(0.0f);
+}
+
+float3 oren_nayar_lut(const KernelGlobals &kg,
+                      const float3 color,
+                      const float cos_theta,
+                      const float roughness)
+{
+  if (!kg.pipe.is_occupancy_pipe) [[static_branch]] {
+    eevee::lut::OrenNayarData lut = eevee::lut::OrenNayarData::sample_utility_tx(
+        kg.util_tx, cos_theta, roughness);
+
+    const OrenNayar oren_nayar = OrenNayar::init(saturate(roughness));
+
+    /* Average albedo, [portsmouth2024] Eq. (15). */
+    const float Eavg = oren_nayar.A + ((2.0f - 5.6f * M_1_PI) / 3.0f) * oren_nayar.B;
+    /* Multiscatter lobe, [portsmouth2024] Eq. (19). */
+    const float3 albedo = saturate(color);
+    const float3 Fms = albedo * Eavg * safe_rcp((1.0f - Eavg) * (1.0f - albedo * (1.0f - Eavg)));
+
+    return max(color, float3(0.0f)) * (lut.Ess + Fms * lut.Ems);
+  }
+  return float3(0.0f);
+}
+
+float sheen_albedo(const KernelGlobals &kg, const float cos_theta, const float roughness)
+{
+  if (!kg.pipe.is_occupancy_pipe) [[static_branch]] {
+    return Sheen::init(kg.util_tx, roughness, cos_theta).R;
+  }
+  return 0.0f;
 }
 
 /* -------------------------------------------------------------------- */

@@ -84,8 +84,8 @@ enum ClosureType : uchar {
   CLOSURE_NONE_ID = 0u,
   /* Diffuse */
   CLOSURE_BSDF_DIFFUSE_ID = 1u,
-  // CLOSURE_BSDF_OREN_NAYAR_ID = 2u,   /* TODO */
-  // CLOSURE_BSDF_SHEEN_ID = 4u,        /* TODO */
+  CLOSURE_BSDF_OREN_NAYAR_ID = 2u,
+  CLOSURE_BSDF_SHEEN_ID = 4u,
   // CLOSURE_BSDF_DIFFUSE_TOON_ID = 5u, /* TODO */
   CLOSURE_BSDF_TRANSLUCENT_ID = 6u,
 
@@ -107,6 +107,7 @@ enum ClosureType : uchar {
   CLOSURE_BSSRDF_BURLEY_ID = 15u,
 };
 
+/* TODO(fclem): Split closure related functions to own file */
 struct ClosureUndetermined {
   packed_float3 color;
   packed_float3 N;
@@ -198,6 +199,18 @@ struct ClosureThinRefraction {
   float roughness;
 };
 
+struct ClosureOrenNayar {
+  packed_float3 color;
+  packed_float3 N;
+  float roughness;
+};
+
+struct ClosureSheen {
+  packed_float3 color;
+  packed_float3 N;
+  float roughness;
+};
+
 ClosureDiffuse to_closure_diffuse(ClosureUndetermined cl)
 {
   ClosureDiffuse closure;
@@ -245,6 +258,24 @@ ClosureRefraction to_closure_refraction(ClosureUndetermined cl)
 ClosureThinRefraction to_closure_thin_refraction(ClosureUndetermined cl)
 {
   ClosureThinRefraction closure;
+  closure.N = cl.N;
+  closure.color = cl.color;
+  closure.roughness = cl.data.x;
+  return closure;
+}
+
+ClosureOrenNayar to_closure_oren_nayar(ClosureUndetermined cl)
+{
+  ClosureOrenNayar closure;
+  closure.N = cl.N;
+  closure.color = cl.color;
+  closure.roughness = cl.data.x;
+  return closure;
+}
+
+ClosureSheen to_closure_sheen(ClosureUndetermined cl)
+{
+  ClosureSheen closure;
   closure.N = cl.N;
   closure.color = cl.color;
   closure.roughness = cl.data.x;

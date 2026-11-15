@@ -168,7 +168,7 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
 
   bool any_face_selected = false;
   for (Object *ob : objects) {
-    const BMesh *bm = BKE_editmesh_bmesh_get(ob);
+    const BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     if (bm->totfacesel == 0) {
       continue;
     }
@@ -198,7 +198,7 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
 
   int tree_index = 0;
   for (Object *ob : objects) {
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     Material ***material_array = nullptr;
     invert_m4_m4(ob->runtime->world_to_object.ptr(), ob->object_to_world().ptr());
 
@@ -317,8 +317,8 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
   }
 
   for (Object *ob : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(ob);
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    EditMesh *em = BKE_editmesh_from_object(ob);
+    BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     bool changed = false;
     Material ***material_array = nullptr;
 
@@ -410,7 +410,8 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
             face_to_plane(ob, face, plane);
 
             float distance_sq;
-            const int nearest = tree_4d->find_nearest(float4(plane), &distance_sq);
+            const int nearest = tree_4d->find_nearest(
+                float4(plane), std::numeric_limits<float>::max(), &distance_sq);
             if (nearest != -1) {
               const float4 &nearest_plane = tree_4d->points()[nearest];
               if (distance_sq <= math::square(thresh)) {
@@ -470,8 +471,8 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
     BLI_assert(ELEM(type, SIMFACE_SMOOTH, SIMFACE_FREESTYLE));
 
     for (Object *ob : objects) {
-      BMEditMesh *em = BKE_editmesh_from_object(ob);
-      BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+      EditMesh *em = BKE_editmesh_from_object(ob);
+      BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
 
       BMFace *face; /* Mesh face. */
       BMIter iter;  /* Selected faces iterator. */
@@ -567,7 +568,7 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
 
   bool any_edge_selected = false;
   for (Object *ob : objects) {
-    const BMesh *bm = BKE_editmesh_bmesh_get(ob);
+    const BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     if (bm->totedgesel == 0) {
       continue;
     }
@@ -592,7 +593,7 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
 
   int tree_index = 0;
   for (Object *ob : objects) {
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     if (bm->totedgesel == 0) {
       continue;
     }
@@ -726,8 +727,8 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
   }
 
   for (Object *ob : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(ob);
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    EditMesh *em = BKE_editmesh_from_object(ob);
+    BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     bool changed = false;
 
     bool has_custom_data_layer = false;
@@ -907,8 +908,8 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
     BLI_assert(ELEM(type, SIMEDGE_SEAM, SIMEDGE_SHARP, SIMEDGE_FREESTYLE));
 
     for (Object *ob : objects) {
-      BMEditMesh *em = BKE_editmesh_from_object(ob);
-      BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+      EditMesh *em = BKE_editmesh_from_object(ob);
+      BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
 
       BMEdge *edge; /* Mesh edge. */
       BMIter iter;  /* Selected edges iterator. */
@@ -955,7 +956,7 @@ static wmOperatorStatus similar_vert_select_exec(bContext *C, wmOperator *op)
 
   bool any_vert_selected = false;
   for (Object *ob : objects) {
-    const BMesh *bm = BKE_editmesh_bmesh_get(ob);
+    const BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     if (bm->totvertsel == 0) {
       continue;
     }
@@ -981,7 +982,7 @@ static wmOperatorStatus similar_vert_select_exec(bContext *C, wmOperator *op)
   int normal_tree_index = 0;
   int tree_1d_index = 0;
   for (Object *ob : objects) {
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     int cd_dvert_offset = -1;
     int cd_crease_offset = -1;
     BLI_bitmap *defbase_selected = nullptr;
@@ -1098,8 +1099,8 @@ static wmOperatorStatus similar_vert_select_exec(bContext *C, wmOperator *op)
 
   /* Run the matching operations. */
   for (Object *ob : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(ob);
-    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    EditMesh *em = BKE_editmesh_from_object(ob);
+    BMesh *bm = BKE_editmesh_bmesh_ensure(ob);
     bool changed = false;
     bool has_crease_layer = false;
     int cd_dvert_offset = -1;
@@ -1238,6 +1239,7 @@ static wmOperatorStatus similar_vert_select_exec(bContext *C, wmOperator *op)
 
     if (changed) {
       EDBM_selectmode_flush(bm, em->selectmode);
+      EDBM_uvselect_clear(bm);
       EDBMUpdate_Params params{};
       params.calc_looptris = false;
       params.calc_normals = false;
@@ -1294,7 +1296,7 @@ static const EnumPropertyItem *select_similar_type_itemf(bContext *C,
   if (obedit && obedit->type == OB_MESH) {
     EnumPropertyItem *item = nullptr;
     int a, totitem = 0;
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    EditMesh *em = BKE_editmesh_from_object(obedit);
 
     if (em->selectmode & SCE_SELECT_VERTEX) {
       for (a = SIMVERT_NORMAL; a < SIMEDGE_LENGTH; a++) {

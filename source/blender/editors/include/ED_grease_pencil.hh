@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 
 #include "BKE_attribute_filter.hh"
@@ -20,6 +21,7 @@
 #include "ED_select_utils.hh"
 
 #include "WM_api.hh"
+#include <cfloat> /* For FLT_MAX */
 
 namespace blender {
 
@@ -210,6 +212,27 @@ class DrawingPlacement {
   float3 try_project_depth(float2 co) const;
 };
 
+struct ClosestGreasePencilDrawing {
+  bke::greasepencil::Drawing *drawing = nullptr;
+  int active_defgroup_index = -1;
+  int stroke_index = -1;
+  float distance_sq = FLT_MAX;
+};
+
+const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
+    const ViewContext &vc,
+    Object *obj,
+    int2 screen_pos,
+    const std::optional<StringRefNull> vertex_group_name,
+    bke::AttrDomain domain);
+
+ClosestGreasePencilDrawing find_closest_editable_greasepencil_drawing_screen_space(
+    const ViewContext &vc,
+    Object *obj,
+    int2 screen_pos,
+    const std::optional<StringRefNull> vertex_group_name,
+    bke::AttrDomain domain);
+
 void set_selected_frames_type(bke::greasepencil::Layer &layer,
                               const eBezTriple_KeyframeType key_type);
 
@@ -269,6 +292,14 @@ bool grease_pencil_layer_parent_set(bke::greasepencil::Layer &layer,
                                     bool keep_transform);
 
 void grease_pencil_layer_parent_clear(bke::greasepencil::Layer &layer, bool keep_transform);
+
+/** The clipboard used to copy and paste keyframes in the animation editors. */
+KeyframeClipboard &keyframe_clipboard();
+/**
+ * Free the drawings in the clipboard, which have to be freed before the GPU back-end exits because
+ * their attributes can store values on the GPU.
+ */
+void keyframe_clipboard_free();
 
 bool grease_pencil_copy_keyframes(bAnimContext *ac, KeyframeClipboard &clipboard);
 
@@ -1000,25 +1031,31 @@ struct CurveBooleanOpParameters {
   bool separate_islands;
 };
 
+struct CurveBooleanResult {
+  bke::CurvesGeometry curves;
+  Array<bool> unchanged_curves;
+  Array<int> dst_to_src_curves;
+};
+
 /* Project the point from local space to the clipping 2d space. */
 using ProjectionFunc = FunctionRef<float2(const float3)>;
 
-bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
-                                  const bke::CurvesGeometry &curves,
-                                  ProjectionFunc project_fn,
-                                  GroupedSpan<int> shapes,
-                                  const IndexMask &editable_shapes,
-                                  const IndexMask &clipping_shapes);
+CurveBooleanResult curve_boolean(const CurveBooleanOpParameters op_params,
+                                 const bke::CurvesGeometry &curves,
+                                 ProjectionFunc project_fn,
+                                 GroupedSpan<int> shapes,
+                                 const IndexMask &editable_shapes,
+                                 const IndexMask &clipping_shapes);
 
-bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
-                                              const bke::CurvesGeometry &curves,
-                                              ProjectionFunc project_fn,
-                                              GroupedSpan<int> shapes,
-                                              Span<float4> curve_planes,
-                                              const IndexMask &editable_shapes,
-                                              const IndexMask &clipping_shapes,
-                                              const float4x4 &layer_to_world,
-                                              const ARegion &region);
+CurveBooleanResult curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
+                                             const bke::CurvesGeometry &curves,
+                                             ProjectionFunc project_fn,
+                                             GroupedSpan<int> shapes,
+                                             Span<float4> curve_planes,
+                                             const IndexMask &editable_shapes,
+                                             const IndexMask &clipping_shapes,
+                                             const float4x4 &layer_to_world,
+                                             const ARegion &region);
 
 }  // namespace boolean
 

@@ -2257,7 +2257,7 @@ struct AutoComplete;
 #define AUTOCOMPLETE_FULL_MATCH 1
 #define AUTOCOMPLETE_PARTIAL_MATCH 2
 
-AutoComplete *autocomplete_begin(const char *startname, size_t maxncpy);
+AutoComplete *autocomplete_begin(const char *startname, size_t maxncpy, bool is_utf8);
 void autocomplete_update_name(AutoComplete *autocpl, StringRef name);
 int autocomplete_end(AutoComplete *autocpl, char *autoname);
 
@@ -2940,6 +2940,8 @@ void template_light_linking_collection(
 
 void template_bone_collection_tree(Layout *layout, bContext *C);
 void template_grease_pencil_layer_tree(Layout *layout, bContext *C);
+
+void template_project_asset_libraries_tree(Layout *layout, bContext *C);
 
 void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr);
 /**

@@ -912,6 +912,7 @@ void WM_event_add_notifier_ex(wmWindowManager *wm,
                               void *reference);
 void WM_event_add_notifier(const bContext *C, unsigned int type, void *reference);
 void WM_main_add_notifier(unsigned int type, void *reference);
+void WM_main_add_notifier(Main *bmain, unsigned int type, void *reference);
 /**
  * Clear notifiers by reference, Used so listeners don't act on freed data.
  */
@@ -1648,6 +1649,13 @@ void WM_uilisttype_free();
  * #WM_uilisttype_list_id_get().
  */
 void WM_uilisttype_to_full_list_id(const uiListType *ult,
+                                   const char *list_id,
+                                   char r_full_list_id[]);
+/**
+ * A version of #WM_uilisttype_to_full_list_id taking the type's identifier,
+ * for callers that only have the name (scripts refer to the list type by name).
+ */
+void WM_uilisttype_to_full_list_id(const char *type_idname,
                                    const char *list_id,
                                    char r_full_list_id[]);
 /**
@@ -2400,7 +2408,8 @@ double WM_tooltip_time_closed();
 
 /* `wm_utils.cc` */
 
-wmGenericCallback *WM_generic_callback_steal(wmGenericCallback *callback);
+[[nodiscard]] wmGenericCallback *WM_generic_callback_steal(wmGenericCallback *callback)
+    ATTR_MALLOC;
 void WM_generic_callback_free(wmGenericCallback *callback);
 
 void WM_generic_user_data_free(wmGenericUserData *wm_userdata);

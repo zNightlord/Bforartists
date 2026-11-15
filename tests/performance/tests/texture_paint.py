@@ -7,9 +7,13 @@ import enum
 import pathlib
 
 
+class BrushType(enum.Enum):
+    PAINT_HARD = "Paint Hard"
+    SMEAR = "Smear"
+
+
 class MeshType(enum.IntEnum):
     CUBE = 0
-    MONKEY = 1
     SUBDIV_3_MONKEY = 2
 
 
@@ -22,7 +26,9 @@ DIMENSIONS = [1024, 4096]
 
 UDIM_OBJECT_NAME = "body_GEO_NEW"
 UDIM_UV_NAME = "godzilUV"
-UDIM_BRUSH_SIZE = 500
+UDIM_SIMPLE_BRUSH_SIZE = 500
+# For more complex brushes (e.g. Smear, Blur) use a smaller size to avoid extremely long benchmark runs
+UDIM_COMPLEX_BRUSH_SIZE = 100
 UDIM_SUBDIVIDE_LEVEL = 3
 UDIM_CANVAS_IMAGE = {
     DataType.BYTE: "overlayColor",
@@ -69,9 +75,7 @@ def prepare_scene(context: any, object: MeshType, image_dimension: int, data_typ
     bpy.ops.object.delete(use_global=False)
     bpy.ops.outliner.orphans_purge()
 
-    if object == MeshType.MONKEY:
-        bpy.ops.mesh.primitive_monkey_add(size=2, align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
-    elif object == MeshType.CUBE:
+    if object == MeshType.CUBE:
         bpy.ops.mesh.primitive_cube_add(size=2, align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
     elif object == MeshType.SUBDIV_3_MONKEY:
         bpy.ops.mesh.primitive_monkey_add(size=2, align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
@@ -105,11 +109,11 @@ def prepare_scene(context: any, object: MeshType, image_dimension: int, data_typ
         float=is_float_image)
 
 
-def prepare_brush():
+def prepare_brush(brush_type: BrushType):
     import bpy
     bpy.ops.brush.asset_activate(
         asset_library_type='ESSENTIALS',
-        relative_asset_identifier="brushes/essentials_brushes-mesh_texture.blend/Brush/Paint Hard")
+        relative_asset_identifier="brushes/essentials_brushes-mesh_texture.blend/Brush/{}".format(brush_type.value))
 
 
 def generate_stroke(context):
@@ -138,7 +142,7 @@ def generate_stroke(context):
     if version[0] <= 4 and version[1] <= 3:
         template["pen_flip"] = False
 
-    num_steps = 100
+    num_steps = 25
     start = Vector((context["area"].width, context["area"].height))
     end = Vector((0, 0))
     delta = (end - start) / (num_steps - 1)
@@ -227,12 +231,12 @@ def _run_brush_test(args: dict):
     set_view3d_context_override(context_override)
     with context.temp_override(**context_override):
         # This needs to run in a View3D context to work correctly for texture paint
-        prepare_brush()
+        prepare_brush(args["brush_type"])
 
     return _measure_brush_strokes(context, args.get("test_setup", False), total_time_start, timeout)
 
 
-def prepare_udim_scene(context: any, data_type: DataType, subdivide_level: int = 0):
+def prepare_udim_scene(context: any, data_type: DataType, brush_type: BrushType, subdivide_level: int = 0):
     import bpy
 
     bpy.context.preferences.experimental.use_3d_texture_paint = True
@@ -287,7 +291,10 @@ def prepare_udim_scene(context: any, data_type: DataType, subdivide_level: int =
 
     bpy.ops.paint.texture_paint_toggle()
 
-    tool_settings.image_paint.unified_paint_settings.size = UDIM_BRUSH_SIZE
+    if (brush_type == BrushType.PAINT_HARD):
+        tool_settings.image_paint.unified_paint_settings.size = UDIM_SIMPLE_BRUSH_SIZE
+    else:
+        tool_settings.image_paint.unified_paint_settings.size = UDIM_COMPLEX_BRUSH_SIZE
 
 
 def _run_udim_brush_test(args: dict):
@@ -309,12 +316,12 @@ def _run_udim_brush_test(args: dict):
     # Create an undo stack explicitly. This isn't created by default in background mode.
     bpy.ops.ed.undo_push()
 
-    prepare_udim_scene(context, args["data_type"], args["subdivide_level"])
+    prepare_udim_scene(context, args["data_type"], args["brush_type"], args["subdivide_level"])
     context_override = context.copy()
     set_view3d_context_override(context_override)
     with context.temp_override(**context_override):
         # This needs to run in a View3D context to work correctly for texture paint
-        prepare_brush()
+        prepare_brush(args["brush_type"])
 
     return _measure_brush_strokes(context, args.get("test_setup", False), total_time_start, timeout)
 
@@ -326,17 +333,23 @@ class TexturePaintBrushTest(api.Test):
             object_type: MeshType,
             dimension: int,
             data_type: DataType,
+            brush_type: BrushType,
             test_setup: bool = False):
         self.filepath = filepath
         self.object_type = object_type
         self.dimension = dimension
         self.data_type = data_type
+        self.brush_type = brush_type
         self.test_setup = test_setup
 
     def name(self):
         suffix = "_setup" if self.test_setup else "_stroke"
-        return "{}_{}_{}{}".format(
-            self.object_type.name.lower(), self.data_type.name.lower(), self.dimension, suffix)
+        return "{}_{}_{}_{}{}".format(
+            self.object_type.name.lower(),
+            self.data_type.name.lower(),
+            self.brush_type.name.lower(),
+            self.dimension,
+            suffix)
 
     def category(self):
         return "texture_paint"
@@ -347,6 +360,7 @@ class TexturePaintBrushTest(api.Test):
             'dimension': self.dimension,
             'data_type': self.data_type,
             'test_setup': self.test_setup,
+            'brush_type': self.brush_type,
         }
 
         result, _ = env.run_in_blender(_run_brush_test, args, [self.filepath])
@@ -355,26 +369,31 @@ class TexturePaintBrushTest(api.Test):
 
 
 class UDIMMonsterPaintTest(api.Test):
-    def __init__(self, filepath: pathlib.Path, data_type: DataType, subdivide_level: int = 0,
+    def __init__(self, filepath: pathlib.Path, data_type: DataType, brush_type: BrushType, subdivide_level: int = 0,
                  test_setup: bool = False):
         self.filepath = filepath
         self.data_type = data_type
+        self.brush_type = brush_type
         self.subdivide_level = subdivide_level
         self.test_setup = test_setup
 
     def name(self):
         suffix = "_setup" if self.test_setup else "_stroke"
         if self.subdivide_level > 0:
-            return "udim_monster_subdiv{}_{}{}".format(
-                self.subdivide_level, self.data_type.name.lower(), suffix)
-        return "udim_monster_{}{}".format(self.data_type.name.lower(), suffix)
+            return "udim_monster_subdiv{}_{}_{}{}".format(
+                self.subdivide_level, self.data_type.name.lower(), self.brush_type.name.lower(), suffix)
+        return "udim_monster_{}_{}{}".format(self.data_type.name.lower(), self.brush_type.name.lower(), suffix)
 
     def category(self):
         return "texture_paint"
 
     def run(self, env, _device_id, _gpu_backend):
-        args = {'data_type': self.data_type, 'subdivide_level': self.subdivide_level,
-                'test_setup': self.test_setup}
+        args = {
+            'data_type': self.data_type,
+            'subdivide_level': self.subdivide_level,
+            'test_setup': self.test_setup,
+            'brush_type': self.brush_type
+        }
 
         result, _ = env.run_in_blender(_run_udim_brush_test, args, [self.filepath])
 
@@ -392,18 +411,26 @@ def generate(env):
         for object_type in MeshType:
             for dimension in DIMENSIONS:
                 for data_type in DataType:
-                    brush_tests.append(TexturePaintBrushTest(base_filepath, object_type, dimension, data_type))
-                    brush_tests.append(
-                        TexturePaintBrushTest(base_filepath, object_type, dimension, data_type,
-                                              test_setup=True))
+                    for brush_type in BrushType:
+                        brush_tests.append(
+                            TexturePaintBrushTest(
+                                base_filepath,
+                                object_type,
+                                dimension,
+                                data_type,
+                                brush_type))
+                        brush_tests.append(
+                            TexturePaintBrushTest(base_filepath, object_type, dimension, data_type, brush_type,
+                                                  test_setup=True))
 
     udim_filepath = blends_by_dir.get('udim_monster')
     if udim_filepath is not None:
         for data_type in DataType:
-            for subdivide_level in (0, UDIM_SUBDIVIDE_LEVEL):
-                brush_tests.append(UDIMMonsterPaintTest(udim_filepath, data_type, subdivide_level))
-                brush_tests.append(
-                    UDIMMonsterPaintTest(udim_filepath, data_type, subdivide_level,
-                                         test_setup=True))
+            for brush_type in BrushType:
+                for subdivide_level in (0, UDIM_SUBDIVIDE_LEVEL):
+                    brush_tests.append(UDIMMonsterPaintTest(udim_filepath, data_type, brush_type, subdivide_level))
+                    brush_tests.append(
+                        UDIMMonsterPaintTest(udim_filepath, data_type, brush_type, subdivide_level,
+                                             test_setup=True))
 
     return brush_tests

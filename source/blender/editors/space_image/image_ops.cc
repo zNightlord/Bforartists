@@ -25,6 +25,7 @@
 #include "BLI_path_utils.hh"
 #include "BLI_set.hh"
 #include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_time.hh"
 #include "BLI_utildefines.hh"
 
@@ -739,10 +740,10 @@ static void image_zoom_apply(ViewZoomData *vpd,
   }
   char str[10];
   if (precision) {
-    SNPRINTF(str, "%4.2f%%", vpd->sima->zoom * 100.0f);
+    SNPRINTF_UTF8(str, "%4.2f%%", vpd->sima->zoom * 100.0f);
   }
   else {
-    SNPRINTF(str, "%i%%", int(round(vpd->sima->zoom * 100.0f)));
+    SNPRINTF_UTF8(str, "%i%%", int(round(vpd->sima->zoom * 100.0f)));
   }
 
   ED_area_status_text(vpd->area, str);
@@ -1497,6 +1498,9 @@ static wmOperatorStatus image_open_exec(bContext *C, wmOperator *op)
     SpaceImage *sima = area->spacedata.first_as<SpaceImage>();
     ED_space_image_set(bmain, sima, ima, false);
     iuser = &sima->iuser;
+
+    /* Frame range is reinitialized below, even when reopening the same image. */
+    iuser->flag |= IMA_NEED_FRAME_RECALC;
   }
   else {
     Tex *tex = static_cast<Tex *>(CTX_data_pointer_get_type(C, "texture", RNA_Texture).data);

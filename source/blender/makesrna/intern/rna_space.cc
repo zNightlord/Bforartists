@@ -1302,10 +1302,7 @@ static PointerRNA rna_SpaceView3D_region_3d_get(PointerRNA *ptr)
   ScrArea *area = rna_area_from_space(ptr);
   void *regiondata = nullptr;
   if (area) {
-    ListBaseT<ARegion> *regionbase = (area->spacedata.first_as<View3D>() == v3d) ?
-                                         &area->regionbase :
-                                         &v3d->regionbase;
-    ARegion *region = regionbase->last(); /* always last in list, weak. */
+    ARegion *region = ED_view3d_area_main_region(area, v3d);
     regiondata = region->regiondata;
   }
 
@@ -1352,9 +1349,7 @@ static void rna_SpaceView3D_region_quadviews_begin(CollectionPropertyIterator *i
   ScrArea *area = rna_area_from_space(ptr);
   int i = 3;
 
-  ARegion *region = static_cast<ARegion *>(
-      ((area && area->spacedata.first_as<View3D>() == v3d) ? &area->regionbase : &v3d->regionbase)
-          ->last());
+  ARegion *region = ED_view3d_area_main_region(area, v3d);
   ListBaseT<ARegion> lb = {nullptr, nullptr};
 
   if (region && region->alignment == RGN_ALIGN_QSPLIT) {
@@ -2734,11 +2729,10 @@ static void rna_SpaceGraphEditor_normalize_update(bContext *C, PointerRNA * /*pt
   ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
   for (bAnimListElem &ale : anim_data) {
     FCurve *fcu = static_cast<FCurve *>(ale.key_data);
-    float offset;
     /* Calling this function updates the cached values in the `FCurve`. Doing so makes it so that
      * the normalization will be correct after enabling the normalization, even with auto normalize
      * disabled. */
-    ANIM_unit_mapping_get_factor(ac.scene, ale.id, fcu, ANIM_UNITCONV_NORMALIZE, &offset);
+    ANIM_unit_mapping_get(ac.scene, ale.id, fcu, ANIM_UNITCONV_NORMALIZE);
   }
   ANIM_animdata_freelist(&anim_data);
 
