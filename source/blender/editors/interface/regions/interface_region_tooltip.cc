@@ -1731,7 +1731,7 @@ static ARegion *tooltip_create_with_data(bContext *C,
 
       bool found = false;
       for (int j = 0; j < 4; j++) {
-        const rcti *r = (&rect.xpos) + j;
+        rcti *r = (&rect.xpos) + j;
         tooltip_adjust_position(win, win_size, box_pad, r); // bfa added offset by cursor
         if (BLI_rcti_inside_rcti(&rect_clamp, r)) {
           rect_i = *r;
@@ -1747,7 +1747,7 @@ static ARegion *tooltip_create_with_data(bContext *C,
       }
     }
     else {
-      tooltip_adjust_position(win, win_size, box_pad, r); // bfa added offset by cursor
+      tooltip_adjust_position(win, win_size, box_pad, &rect_i); // bfa added offset by cursor
       const int clamp_pad_x = int((5.0f * UI_SCALE_FAC) + (pad_x * 0.5f));
       const int clamp_pad_y = int((7.0f * UI_SCALE_FAC) + (pad_y * 0.5f));
       rcti rect_clamp;
