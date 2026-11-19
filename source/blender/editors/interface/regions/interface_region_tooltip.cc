@@ -1464,6 +1464,7 @@ static std::unique_ptr<TooltipData> tooltip_data_from_custom_func(bContext *C, B
   return data->fields.is_empty() ? nullptr : std::move(data);
 }
 
+/* bfa start offset by cursor */
 static void tooltip_avoid_cursor(const wmWindow *win,
                                  const int2 &win_size,
                                  const int2 &pad,
@@ -1519,7 +1520,6 @@ static void tooltip_avoid_cursor(const wmWindow *win,
   }
 }
 
-/* Avoid the cursor first, then add the user's manual offset on top. */
 static void tooltip_adjust_position(const wmWindow *win,
                                     const int2 &win_size,
                                     const int2 &pad,
@@ -1528,6 +1528,7 @@ static void tooltip_adjust_position(const wmWindow *win,
   if (U.bfa_ui_flag & USER_TOOLTIP_CURSOR_OFFSET) {
     tooltip_avoid_cursor(win, win_size, pad, r_rect);
   }
+  // manual offset with values
   BLI_rcti_translate(r_rect,
                      int(U.tooltip_offset[0] * UI_SCALE_FAC),
                      int(U.tooltip_offset[1] * UI_SCALE_FAC));
@@ -1537,6 +1538,7 @@ static void tooltip_apply_manual_offset(rcti *r_rect)
   BLI_rcti_translate(
       r_rect, int(U.tooltip_offset[0] * UI_SCALE_FAC), int(U.tooltip_offset[1] * UI_SCALE_FAC));
 }
+/* bfa end offset by cursor */
 
 static ARegion *tooltip_create_with_data(bContext *C,
                                          std::unique_ptr<TooltipData> data_uptr,
@@ -1570,6 +1572,8 @@ static ARegion *tooltip_create_with_data(bContext *C,
   int h = BLF_height_max(data->fstyle.uifont_id);
   const float pad_x = h * TIP_PADDING_X;
   const float pad_y = h * TIP_PADDING_Y;
+  const int2 box_pad(int(round(pad_x * 0.5f)), int(round(pad_y * 0.5f)));
+
 
   fontstyle_set(&data->fstyle);
 
@@ -1728,7 +1732,7 @@ static ARegion *tooltip_create_with_data(bContext *C,
       bool found = false;
       for (int j = 0; j < 4; j++) {
         const rcti *r = (&rect.xpos) + j;
-        tooltip_adjust_position(win, win_size, box_pad, r);
+        tooltip_adjust_position(win, win_size, box_pad, r); // bfa added offset by cursor
         if (BLI_rcti_inside_rcti(&rect_clamp, r)) {
           rect_i = *r;
           found = true;
@@ -1743,7 +1747,7 @@ static ARegion *tooltip_create_with_data(bContext *C,
       }
     }
     else {
-      tooltip_adjust_position(win, win_size, box_pad, r);
+      tooltip_adjust_position(win, win_size, box_pad, r); // bfa added offset by cursor
       const int clamp_pad_x = int((5.0f * UI_SCALE_FAC) + (pad_x * 0.5f));
       const int clamp_pad_y = int((7.0f * UI_SCALE_FAC) + (pad_y * 0.5f));
       rcti rect_clamp;
@@ -1771,10 +1775,6 @@ static ARegion *tooltip_create_with_data(bContext *C,
 
   /* add padding */
   BLI_rcti_pad(&rect_i, int(round(pad_x * 0.5f)), int(round(pad_y * 0.5f)));
-
-  if (U.bfa_ui_flag & USER_TOOLTIP_CURSOR_OFFSET) {
-    tooltip_avoid_cursor(win, win_size, &rect_i);
-  }
 
   /* widget rect, in region coords */
   {
