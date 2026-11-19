@@ -1464,6 +1464,60 @@ static std::unique_ptr<TooltipData> tooltip_data_from_custom_func(bContext *C, B
   return data->fields.is_empty() ? nullptr : std::move(data);
 }
 
+static void tooltip_avoid_cursor(const wmWindow *win, const int2 &win_size, rcti *r_rect)
+{
+  const int size = int(
+      std::lround(WM_cursor_preferred_logical_size(true) * WM_window_dpi_get_scale(win)));
+  const int gap = int(2.0f * UI_SCALE_FAC);
+  const int *mouse = win->runtime->eventstate->xy;
+
+  rcti cursor;
+  cursor.xmin = mouse[0];
+  cursor.xmax = mouse[0] + size;
+  cursor.ymax = mouse[1];
+  cursor.ymin = mouse[1] - size;
+
+  if (!BLI_rcti_isect(r_rect, &cursor, nullptr)) {
+    return;
+  }
+
+  /* Minimal translation for each direction. Order is the tie-break: prefer down. */
+  const int2 candidates[4] = {
+      int2(0, -(r_rect->ymax - cursor.ymin) - gap), /* Down. */
+      int2((cursor.xmax - r_rect->xmin) + gap, 0),  /* Right. */
+      int2(-(r_rect->xmax - cursor.xmin) - gap, 0), /* Left. */
+      int2(0, (cursor.ymax - r_rect->ymin) + gap),  /* Up. */
+  };
+
+  rcti win_rect;
+  BLI_rcti_init(&win_rect, 0, win_size[0], 0, win_size[1]);
+
+  int best = -1;
+  int best_dist = INT_MAX;
+  for (int i = 0; i < 4; i++) {
+    rcti moved = *r_rect;
+    BLI_rcti_translate(&moved, candidates[i].x, candidates[i].y);
+    if (!BLI_rcti_inside_rcti(&win_rect, &moved)) {
+      continue;
+    }
+    const int dist = abs(candidates[i].x) + abs(candidates[i].y);
+    if (dist < best_dist) {
+      best_dist = dist;
+      best = i;
+    }
+  }
+
+  if (best != -1) {
+    BLI_rcti_translate(r_rect, candidates[best].x, candidates[best].y);
+  }
+}
+
+static void tooltip_apply_manual_offset(rcti *r_rect)
+{
+  BLI_rcti_translate(
+      r_rect, int(U.tooltip_offset[0] * UI_SCALE_FAC), int(U.tooltip_offset[1] * UI_SCALE_FAC));
+}
+
 static ARegion *tooltip_create_with_data(bContext *C,
                                          std::unique_ptr<TooltipData> data_uptr,
                                          const float init_position[2],
@@ -1568,6 +1622,9 @@ static ARegion *tooltip_create_with_data(bContext *C,
     rect_fl.ymax = init_position[1] - (h * 0.2f) - (pad_y * 0.5f);
     rect_fl.ymin = rect_fl.ymax - fonth;
     BLI_rcti_rctf_copy(&rect_i, &rect_fl);
+  }
+  if (U.bfa_ui_flag & USER_TOOLTIP_CURSOR_OFFSET) {
+    tooltip_apply_manual_offset(&rect_i);
   }
 
   // #define USE_ALIGN_Y_CENTER
@@ -1693,6 +1750,10 @@ static ARegion *tooltip_create_with_data(bContext *C,
 
   /* add padding */
   BLI_rcti_pad(&rect_i, int(round(pad_x * 0.5f)), int(round(pad_y * 0.5f)));
+
+  if (U.bfa_ui_flag & USER_TOOLTIP_CURSOR_OFFSET) {
+    tooltip_avoid_cursor(win, win_size, &rect_i);
+  }
 
   /* widget rect, in region coords */
   {
