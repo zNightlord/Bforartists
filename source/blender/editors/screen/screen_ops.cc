@@ -3304,10 +3304,24 @@ static wmOperatorStatus area_edge_split_exec(bContext *C, wmOperator *op)
         (dir_axis == SCREEN_AXIS_V) ?
             float(cursor[0] - area->v1->vec.x) / float(area->v4->vec.x - area->v1->vec.x) :
             float(cursor[1] - area->v1->vec.y) / float(area->v2->vec.y - area->v1->vec.y);
-    if (area_split_allowed(area, dir_axis) &&
-        area_split(win, screen, area, dir_axis, fac) != nullptr)
-    {
-      changed = true;
+    
+    if (!area_split_allowed(area, dir_axis)) {
+      continue;
+    }
+
+    ScrArea *new_area = area_split(win, screen, area, dir_axis, fac);
+    if (new_area == nullptr) {
+      continue;
+    }
+    changed = true;
+
+    /* Make sure both halves rebuild their region data on the next draw. */
+    for (ScrArea *half : {area, new_area}) {
+      ED_area_tag_redraw(half);
+      for (ARegion &region : half.regionbase) {
+        region.do_draw &= ~RGN_DRAW_NO_REBUILD;
+        ED_region_tag_redraw(region);
+      }
     }
   }
 
