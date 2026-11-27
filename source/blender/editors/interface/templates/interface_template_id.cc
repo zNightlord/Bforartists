@@ -28,6 +28,7 @@
 
 #include "DNA_collection_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h" // bfa node editor window
 #include "DNA_space_types.h" // bfa node editor window
 #include "DNA_workspace_types.h"
 
@@ -1072,17 +1073,17 @@ static void bfa_template_id_node_editor_button(Layout &layout,
 
   switch (GS(id->name)) {
     case ID_MA:
-      opname = "MATERIAL_OT_open_node_editor"; /* verify idname */
+      opname = "MATERIAL_OT_open_node_editor";
       layout.context_ptr_set("material", &idptr);
       break;
 
     case ID_WO:
-      opname = "WORLD_OT_open_node_editor"; /* verify idname */
+      opname = "WORLD_OT_open_node_editor";
       layout.context_ptr_set("world", &idptr);
       break;
 
     case ID_TE: {
-      /* Brush and brush mask only; other texture users have no node editor context. */
+      /* Brush and brush mask only; other texture users should not have node editor usage. */
       if (!in_texture_tab || !owner_ptr.owner_id || GS(owner_ptr.owner_id->name) != ID_BR) {
         return;
       }
@@ -1100,23 +1101,20 @@ static void bfa_template_id_node_editor_button(Layout &layout,
         opname = "SCENE_OT_effect_compositor_open_editor";
         layout.context_ptr_set("effect", &owner_ptr);
       }
-      else if (RNA_struct_is_a(owner_ptr.type, &RNA_StripModifier)) {
+      else if (RNA_struct_is_a(owner_ptr.type, RNA_StripModifier)) {
         const StripModifierData *smd = static_cast<const StripModifierData *>(owner_ptr.data);
         if (!smd || smd->type != eSeqModifierType_Compositor) {
           return;
         }
-        opname = "SEQUENCER_OT_compositor_modifier_open_editor";
+        opname = "SEQUENCER_OT_strip_modifier_compositor_open_editor";
         layout.context_ptr_set("modifier", &owner_ptr);
       }
-      else if (RNA_struct_is_a(owner_ptr.type, &RNA_Strip)) {
+      else if (RNA_struct_is_a(owner_ptr.type, RNA_Strip)) {
         const Strip *strip = static_cast<const Strip *>(owner_ptr.data);
-        if (!strip || strip->type != STRIP_TYPE_COMPOSITOR) {
-          return;
-        }
         if (!strip || strip->type != STRIP_TYPE_COMPOSITOR || !strip->effectdata) {
           return;
         }
-        opname = "SEQUENCER_OT_compositor_modifier_open_editor"; 
+        opname = "SEQUENCER_OT_strip_modifier_compositor_open_editor"; 
         layout.context_ptr_set("strip", &owner_ptr);
       }
       break;

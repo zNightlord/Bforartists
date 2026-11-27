@@ -680,25 +680,17 @@ void SEQUENCER_OT_strip_modifier_set_active(wmOperatorType *ot)
 static wmOperatorStatus compositor_modifier_open_editor_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
-  if (!strip) {
-    return OPERATOR_CANCELLED;
-  }
 
   /* BFA - resolve modifier from operator property or active state */
-  Strip *strip = nullptr;
-  StripModifierData *smd = nullptr;
   bNodeTree *ntree = nullptr;
 
   const PointerRNA mod_ptr = CTX_data_pointer_get_type(C, "modifier", RNA_StripModifier);
   const PointerRNA strip_ptr = CTX_data_pointer_get_type(C, "strip", RNA_Strip);
-  const std::string modifier_name = RNA_string_get(op->ptr, "modifier");
 
-  if (!modifier_name.empty() || mod_ptr.data) {
+  if (mod_ptr.data) {
     /* Strip modifier: node group comes from the compositor modifier. */
-    strip = seq::select_active_get(scene);
-    smd = !modifier_name.empty() ? seq::modifier_find_by_name(strip, modifier_name.c_str()) :
-                                  static_cast<StripModifierData *>(mod_ptr.data);
-    if (!smd || smd->type != eSeqModifierType_Compositor) {
+    StripModifierData *smd = static_cast<StripModifierData *>(mod_ptr.data);
+    if (smd->type != eSeqModifierType_Compositor) {
       return OPERATOR_CANCELLED;
     }
     ntree = reinterpret_cast<SequencerCompositorModifierData *>(smd)->node_group;
@@ -706,12 +698,14 @@ static wmOperatorStatus compositor_modifier_open_editor_exec(bContext *C, wmOper
   }
   else if (strip_ptr.data) {
     /* Effect strip: node group belongs to the compositor strip itself. */
-    strip = static_cast<Strip *>(strip_ptr.data);
-    if (strip->type != STRIP_TYPE_COMPOSITOR) {
+    const Strip *strip = static_cast<const Strip *>(strip_ptr.data);
+    if (strip->type != STRIP_TYPE_COMPOSITOR || !strip->effectdata) {
       return OPERATOR_CANCELLED;
     }
     CompositorEffectVars *data = static_cast<CompositorEffectVars *>(strip->effectdata);
     ntree = data->node_group;
+  } else {
+    return OPERATOR_CANCELLED
   }
 
   const bool result = ED_node_tree_open_temp(C,
@@ -735,11 +729,6 @@ void SEQUENCER_OT_strip_modifier_compositor_open_editor(wmOperatorType *ot)
   ot->poll = sequencer_strip_editable_poll;
 
   ot->flag = OPTYPE_REGISTER;
-
-  /* BFA - hidden property so the UI button knows which modifier to target */
-  ot->prop = RNA_def_string(
-      ot->srna, "modifier", nullptr, MAX_NAME, "Modifier", "Name of the modifier to edit");
-  RNA_def_property_flag(ot->prop, PROP_HIDDEN);
 }
 
 /** \} */
