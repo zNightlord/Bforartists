@@ -694,7 +694,6 @@ static wmOperatorStatus compositor_modifier_open_editor_exec(bContext *C, wmOper
       return OPERATOR_CANCELLED;
     }
     ntree = reinterpret_cast<SequencerCompositorModifierData *>(smd)->node_group;
-    seq::modifier_set_active(strip, smd);
   }
   else if (strip_ptr.data) {
     /* Effect strip: node group belongs to the compositor strip itself. */
@@ -705,7 +704,7 @@ static wmOperatorStatus compositor_modifier_open_editor_exec(bContext *C, wmOper
     CompositorEffectVars *data = static_cast<CompositorEffectVars *>(strip->effectdata);
     ntree = data->node_group;
   } else {
-    return OPERATOR_CANCELLED
+    return OPERATOR_CANCELLED;
   }
 
   const bool result = ED_node_tree_open_temp(C,
